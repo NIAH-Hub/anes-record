@@ -157,6 +157,9 @@ header{
 .preset-row select{flex:1 1 0; min-width:0; padding:8px 4px; font-size:14px;}
 .preset-row.drug select{flex:1.3 1 0; min-width:104px;}
 .preset-row .del{flex:0 0 auto; color:var(--dim); font-size:13px; min-height:44px; padding:0 8px;}
+#peList .reorder{flex:0 0 auto;}
+#peList .reorder button{min-width:34px; padding:0 4px;}
+#peList input[data-pe]{font-weight:600;}
 .preset-row .del:active{color:var(--danger);}
 .preset-add{margin:2px 0 4px;}
 .reorder{flex:0 0 auto; display:flex; gap:2px;}
@@ -240,6 +243,7 @@ header{
 
 /* ---------- print ---------- */
 .print-root{display:none;}
+#gzAlarm{position:fixed;top:0;left:0;right:0;z-index:90;background:#C2426E;color:#fff;padding:12px 16px;font-size:15px;font-weight:600;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.3)}
 @media print{
   @page{size:A4 landscape; margin:9mm;}
   body{height:auto; overflow:visible; background:#fff; color:#111; display:block;}
@@ -270,7 +274,7 @@ header{
 <div class="app" style="display:flex;flex-direction:column;height:100dvh;">
 
   <header>
-    <div class="brand">麻酔記録<small>ANESTHESIA CHART</small></div>
+    <div class="brand">麻酔記録<small>ANESTHESIA CHART</small><span style="font-size:9px;color:var(--muted);margin-left:6px">v4.2</span></div>
     <button class="case-chip" id="caseChip" type="button">
       <b id="ccName">症例情報未設定</b>
       <span id="ccSub">タップで入力（飼主・種・体重・術式など）</span>
@@ -291,6 +295,7 @@ header{
     </div>
   </header>
 
+<div id="gzAlarm" style="display:none">⚠ ガーゼが体内に <b id="gzAlarmN">0</b>枚 残っています — 取り出しを確認してください</div>
   <div id="infBar"></div>
 
   <div class="chart-wrap">
@@ -307,7 +312,7 @@ header{
   <nav class="tabbar">
     <button class="active" data-tab="vitals" type="button">モニター入力</button>
     <button data-tab="events" type="button">イベント・薬剤</button>
-    <button data-tab="hist" type="button">履歴・写真</button>
+    <button data-tab="guide">手引き</button><button data-tab="hist" type="button">履歴・写真</button>
   </nav>
 
   <main class="content">
@@ -333,9 +338,11 @@ header{
             <small>mmHg（±1）</small></div>
           <div class="vital"><label><span class="dot" style="background:var(--rr)"></span>呼吸数 RR</label>
             <div class="ctl"><button type="button" data-step="rr:-1">−</button><input id="in-rr" inputmode="none" placeholder="—"><button type="button" data-step="rr:1">＋</button></div>
+            <button type="button" id="benchBtn2" style="flex:0 0 100%;margin-top:4px;padding:8px 0;font-size:12px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)">人工呼吸（ベンチ）OFF</button>
             <small>単位 /分（±1）</small></div>
           <div class="vital"><label><span class="dot" style="background:var(--nibp)"></span>SYS</label>
             <div class="ctl"><button type="button" data-step="nibpS:-1">−</button><input id="in-nibpS" inputmode="none" placeholder="—"><button type="button" data-step="nibpS:1">＋</button></div>
+            <button type="button" id="bpModeBtn" style="flex:0 0 100%;margin-top:4px;padding:8px 0;font-size:12px;font-weight:700;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--muted)">血圧測定: NIBP</button>
             <small>収縮期 mmHg（±1）</small></div>
           <div class="vital"><label><span class="dot" style="background:var(--nibp)"></span>DIA</label>
             <div class="ctl"><button type="button" data-step="nibpD:-1">−</button><input id="in-nibpD" inputmode="none" placeholder="—"><button type="button" data-step="nibpD:1">＋</button></div>
@@ -361,9 +368,42 @@ header{
     <!-- ===== イベント・薬剤 ===== -->
     <section class="tabpane" id="pane-events">
       <div class="panel-card">
+        <div class="panel-head"><h2>ガーゼカウント</h2></div>
+        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+          <div class="mono" style="font-size:20px;font-weight:700;color:#C2426E">体内 <span id="gzIn">0</span>枚</div>
+          <div class="mono" style="font-size:13px;color:var(--muted)">使用合計 <span id="gzTotal">0</span>枚</div>
+        </div>
+        <div class="chip-row" style="margin-top:10px">
+          <button class="btn btn-sm" id="gzInBtn" type="button">＋1</button>
+          <button class="btn btn-sm" id="gzOutBtn" type="button">－1</button>
+          <button class="btn btn-sm" id="gzReset" type="button">0に戻す</button>
+        </div>
+
+        <p class="hint" style="margin-top:8px">留置・取り出しのたびにタップ（タイムラインにも記録されます）。タイマーを<b>停止したとき体内枚数が残っていると、画面上部に警告とアラーム音</b>が出ます。全て取り出すと自動で消えます。</p>
+      </div>
+      <div class="panel-card">
+        <div class="panel-head"><h2>輸液ライン — メイン輸液とCRIの流量管理</h2></div>
+        <div class="custom-row" style="margin-bottom:6px">
+          <select id="fluidSel" style="flex:1;min-height:44px;font-size:15px"><option value="">輸液剤を選択…</option></select>
+        </div>
+        <div class="custom-row" style="margin-top:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" id="fluidTotalBtn" type="button" style="font-size:22px;min-height:52px;min-width:160px;font-family:ui-monospace,'SF Mono',Menlo,monospace">10 <small>mL/kg/hr</small></button>
+          <span class="hint" style="line-height:1.4">タップでドラム選択<br>（1〜20）</span>
+          <input id="in-fluidtotal" style="display:none">
+          <input id="fluidTotal" inputmode="decimal" placeholder="総流量 mL/hr（例 150）" style="display:none">
+          <button class="chip" id="fluidUnitBtn" type="button" style="white-space:nowrap">mL/kg/hr</button>
+          <button class="btn" id="fluidSet" type="button">設定</button>
+        </div>
+        <div id="fluidBox" style="margin-top:10px;font-size:15px;line-height:1.7"></div>
+        <p class="hint" style="margin-top:8px">メインの輸液剤を選び<b>総流量</b>を設定します。<b>mL/kg/hrモードは流量欄をタップするとモニター入力と同じドラムで選択（1〜20・初期値10）</b>、<b>mL/hrモード（実ポンプ値）は手入力</b>です（単位ボタンで切替）。CRI薬の開始・終了・流量変更に合わせて<b>メインポンプの設定値（mL/hr）を自動計算して表示</b>します（総流量からCRI分を差し引いた値）。CRIの換算には薬液濃度の設定が必要です。輸液剤の追加・変更は「プリセット編集」でできます。</p>
+      </div>
+      <div class="panel-card">
         <div class="panel-head">
           <h2>イベント — ワンタップで現在時刻に記録</h2>
-          <button class="btn btn-sm presetOpen" type="button">プリセット編集</button>
+          <span style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-primary" id="evSetBtn" type="button">セット: 標準</button>
+            <button class="btn btn-sm presetOpen" type="button">プリセット編集</button>
+          </span>
         </div>
         <div class="chips" id="eventChips"></div>
         <div class="custom-row">
@@ -381,8 +421,31 @@ header{
           </span>
         </div>
         <div class="chips" id="drugChips"></div>
+      </div>
+      <div class="panel-card">
+        <div class="panel-head">
+          <h2>材料 — 使用した物品を記録</h2>
+          <span style="display:flex;gap:6px">
+            <button class="btn btn-sm btn-primary" id="matSetBtn" type="button">セット: 標準</button>
+            <button class="btn btn-sm presetOpen" type="button">プリセット編集</button>
+          </span>
+        </div>
+        <div class="chips" id="matChips"></div>
+        <p class="hint" style="margin-top:8px">タップで数量選択（×1,2,3,5,10）。記録はタイムラインに入り、PDFに<b>材料別の使用数量の集計表</b>が出ます。</p>
         <p class="hint" id="undoHint" style="margin-top:8px">まだ投与記録がありません</p>
         <p class="hint" style="margin-top:8px">チップは「並び:使用頻度」のとき、投与回数の多い順に自動で並び替わります（登録順に戻すには見出しのボタンをタップ）。用量を設定したプリセット（例：アトロピン 10µg/kg）は<b>タップ1回で投与記録</b>できます。体重を設定していれば kg 当たり用量から実用量を自動換算して記録に付記します。プリセットは「プリセット編集」で追加・変更でき、この端末に保存されます。</p>
+      </div>
+    </section>
+
+    <!-- ===== 手引き ===== -->
+    <section class="tabpane" id="pane-guide">
+      <div class="panel-card">
+        <div class="panel-head"><h2>薬剤手引き — 希釈・用量・注意</h2><button class="btn btn-sm" id="guideAdd" type="button">＋ 追加</button></div>
+        <div class="custom-row" style="margin-bottom:8px">
+          <input id="guideSearch" placeholder="薬剤名で検索（例：ドパミン、ノルアド、メデト）">
+        </div>
+        <div id="guideList"></div>
+        <p class="hint" style="margin-top:8px">行をタップで開閉。内容は院内マニュアル（CRI一覧・救急薬・薬用量計算）に基づきます。希釈液はメスアップに5％ブドウ糖液でも生食でもOK（肺水腫・高血圧など細胞外液を増やしたくない時は5％ブドウ糖液）。</p>
       </div>
     </section>
 
@@ -393,10 +456,13 @@ header{
         <div class="chip-row">
           <button class="btn" id="exportBtn" type="button">ファイルに書き出す</button>
           <button class="btn" id="importBtn" type="button">ファイルから読み込む</button>
+          <button class="btn" id="expPresetBtn" type="button">プリセットだけ書き出す</button>
+          <button class="btn" id="impPresetBtn" type="button">プリセットだけ読み込む</button>
           <button class="btn btn-sm" id="preImportRestore" type="button" style="display:none">読み込み前の状態に戻す</button>
           <input type="file" id="importInput" accept=".json,application/json" style="display:none">
+          <input type="file" id="presetInput" accept=".json,application/json" style="display:none">
         </div>
-        <p class="hint">書き出したファイル（1症例＝1ファイル・写真とプリセット込み）は「ファイル」アプリや他のiPadに渡せます。読み込むと現在の表示内容とプリセットが置き換わります。長期のカルテ保存はPDF出力との併用を推奨します。</p>
+        <p class="hint">「プリセットだけ」は設定配布用（読み込んでも記録中の症例には触れません）。「ファイルに書き出す」は1症例一式（写真とプリセット込み）の保存・移行用で、読み込むと現在の表示内容が置き換わります。どちらもDropbox等の共有フォルダ経由で複数端末に配れます。長期のカルテ保存はPDF出力との併用を推奨。</p>
       </div>
       <div class="panel-card">
         <h2>モニター写真（任意）</h2>
@@ -444,11 +510,11 @@ header{
   <!-- ===== 薬剤用量モーダル ===== -->
   <div class="modal" id="drugModal">
     <div class="modal-inner">
-      <div class="modal-head"><h3 id="drugTitle">薬剤投与</h3><button class="x" data-close="drugModal" type="button">✕</button></div>
+      <div class="modal-head"><h3 id="drugTitle">薬剤投与</h3><button class="btn btn-sm" id="dGuide" type="button" style="margin-right:8px">ℹ 手引き</button><button class="x" data-close="drugModal" type="button">✕</button></div>
       <div class="frm">
         <div class="full"><label>薬剤名</label><input id="d-name"></div>
         <div><label>投与量</label><input id="d-dose" inputmode="decimal" placeholder="例 0.5"></div>
-        <div><label>単位</label><input id="d-unit" list="unitList" placeholder="例 mg、mL/kg/h"><datalist id="unitList"><option value="mL"></option><option value="mg"></option><option value="µg"></option><option value="mg/kg"></option><option value="µg/kg"></option><option value="mL/kg/h"></option><option value="µg/kg/min"></option><option value="µg/kg/hr"></option><option value="mg/kg/min"></option><option value="mg/kg/hr"></option><option value="滴/分"></option><option value="U/kg/min"></option><option value="U/kg/hr"></option><option value="U/min"></option><option value="U/hr"></option></datalist></div>
+        <div><label>単位</label><input id="d-unit" list="unitList" placeholder="例 mg、mL/kg/h"><datalist id="unitList"><option value="mL"></option><option value="mg"></option><option value="µg"></option><option value="mg/kg"></option><option value="µg/kg"></option><option value="mL/kg"></option><option value="mL/kg/h"></option><option value="mL/kg/hr"></option><option value="mL/kg/min"></option><option value="µg/kg/min"></option><option value="µg/kg/hr"></option><option value="mg/kg/min"></option><option value="mg/kg/hr"></option><option value="滴/分"></option><option value="U/kg/min"></option><option value="U/kg/hr"></option><option value="U/min"></option><option value="U/hr"></option></datalist></div>
         <div><label>経路</label><select id="d-route"><option>IV 静注</option><option>IM 筋注</option><option>SC 皮下</option><option>点滴（持続）</option><option>CRI（持続静注）</option><option>気管内</option><option>局所</option><option>経口</option></select></div>
         <div><label>メモ</label><input id="d-memo"></div>
       </div>
@@ -462,7 +528,7 @@ header{
   <!-- ===== 流量変更モーダル ===== -->
   <div class="modal" id="infModal">
     <div class="modal-inner">
-      <div class="modal-head"><h3 id="infTitle">流量変更</h3><button class="x" data-close="infModal" type="button">✕</button></div>
+      <div class="modal-head"><h3 id="infTitle">流量変更</h3><button class="btn btn-sm" id="iGuide" type="button" style="margin-right:8px">ℹ 手引き</button><button class="x" data-close="infModal" type="button">✕</button></div>
       <div class="frm">
         <div class="full"><label>濃度プリセット（薬剤を選ぶと濃度が入ります）</label><select id="i-cpreset"></select></div>
         <div><label>薬用量</label><input id="i-dose" inputmode="decimal"></div>
@@ -495,6 +561,57 @@ header{
   </div>
 
   <!-- ===== 記録修正モーダル ===== -->
+  <div class="modal" id="matSetModal">
+    <div class="modal-inner">
+      <div class="modal-head"><h3>材料セット切替</h3><button class="x" data-close="matSetModal" type="button">✕</button></div>
+      <p class="hint" style="margin:6px 0 10px">術式ごとに材料チップの一覧を切替えます。セットの追加・名前変更は「プリセット編集」で。</p>
+      <div class="chips" id="matSetChips" style="margin-bottom:8px"></div>
+      <div class="frm-actions"><button class="btn" data-close="matSetModal" type="button">キャンセル</button></div>
+    </div>
+  </div>
+  <div class="modal" id="guideEditModal">
+    <div class="modal-inner">
+      <div class="modal-head"><h3>手引きの編集</h3><button class="x" data-close="guideEditModal" type="button">✕</button></div>
+      <div class="frm">
+        <div class="full"><label>薬剤名</label><input id="ge-n" placeholder="例：アトロピン"></div>
+        <div class="full"><label>分類（任意）</label><input id="ge-k" placeholder="例：徐脈"></div>
+        <div class="full"><label>希釈方法</label><input id="ge-c" placeholder="例：1アンプルを生食10mlにメスアップ"></div>
+        <div class="full"><label>用量</label><input id="ge-d" placeholder="例：0.02〜0.05ml/kg iv"></div>
+        <div class="full"><label>注意（任意）</label><input id="ge-w" placeholder="例：徐脈時は禁忌"></div>
+      </div>
+      <div class="frm-actions">
+        <button class="btn" data-close="guideEditModal" type="button">キャンセル</button>
+        <button class="btn btn-primary" id="geSave" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="evSetModal">
+    <div class="modal-inner">
+      <div class="modal-head"><h3>イベントセット切替</h3><button class="x" data-close="evSetModal" type="button">✕</button></div>
+      <p class="hint" style="margin:6px 0 10px">使う術式のセットを選んでください（記録内容には影響しません）。セットの追加・名前変更は「プリセット編集」で。</p>
+      <div class="chips" id="evSetChips" style="margin-bottom:8px"></div>
+      <div class="frm-actions"><button class="btn" data-close="evSetModal" type="button">キャンセル</button></div>
+    </div>
+  </div>
+  <div class="modal" id="indModal">
+    <div class="modal-inner">
+      <div class="modal-head"><h3>導入方法を選択</h3><button class="x" data-close="indModal" type="button">✕</button></div>
+      <p class="hint" style="margin:6px 0 10px">タイマーを開始し、「導入」を記録します。方式を選んでください（Escや✕で中断すると開始しません）。</p>
+      <div class="chips" id="indChips" style="margin-bottom:8px"></div>
+      <div class="frm-actions">
+        <button class="btn" data-close="indModal" type="button">キャンセル</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="posModal">
+    <div class="modal-inner">
+      <div class="modal-head"><h3 id="posTitle">選択してください</h3><button class="x" data-close="posModal" type="button">✕</button></div>
+      <div class="chips" id="posChips" style="margin:10px 0 4px"></div>
+      <div class="frm-actions">
+        <button class="btn" data-close="posModal" type="button">キャンセル</button>
+      </div>
+    </div>
+  </div>
   <div class="modal" id="evEditModal">
     <div class="modal-inner">
       <div class="modal-head"><h3 id="eeTitle">記録の修正</h3><button class="x" data-close="evEditModal" type="button">✕</button></div>
@@ -525,7 +642,7 @@ header{
           <button class="btn" id="pwSet" type="button">設定して次へ</button>
         </div>
       </div>
-      <p class="hint" style="margin-top:6px">ホイールをスクロール（または数字をタップ）して値を選び、<b>「設定して次へ」で確定</b>すると次の項目に移ります。最後の項目が終わると自動で閉じます。</p>
+      <p class="hint" style="margin-top:6px">ホイールをスクロール（または数字をタップ）して値を選び、<b>「設定して次へ」または直接入力欄でEnter</b>で確定すると次の項目に移ります。最後の項目が終わると自動で閉じます。</p>
     </div>
   </div>
 
@@ -537,12 +654,24 @@ header{
       <div class="psec-h">イベント <span class="hint">（↑↓ボタンで表示順を変更できます）</span></div>
       <div id="peList"></div>
       <button class="btn preset-add" id="peAdd" type="button">＋ イベントを追加</button>
+      <div class="psec-h">イベントセット <span class="hint">（術式ごとにチップ一覧を切替えられます。編集中は下の一覧が「選択中のセット」の中身です）</span></div>
+      <div id="psetList"></div>
+      <button class="btn preset-add" id="psetDup" type="button">＋ 今のセットを複製して新しいセットを作る</button>
       <div class="psec-h">薬剤・輸液 <span class="hint">（↑↓ボタンで表示順を変更できます）</span></div>
       <div id="pdList"></div>
       <button class="btn preset-add" id="pdAdd" type="button">＋ 薬剤を追加</button>
       <div class="psec-h">CRI濃度プリセット <span class="hint">（流量変更モーダルで選ぶだけで濃度が入ります）</span></div>
       <div id="pcList"></div>
       <button class="btn preset-add" id="pcAdd" type="button">＋ 濃度プリセットを追加</button>
+      <div class="psec-h">輸液ラインの輸液剤 <span class="hint">（メイン輸液として選べる薬剤）</span></div>
+      <div id="pfList"></div>
+      <button class="btn preset-add" id="pfAdd" type="button">＋ 輸液剤を追加</button>
+      <div class="psec-h">材料 <span class="hint">（縫合糸・クリップ等。タップで数量を選んで記録します）</span></div>
+      <div id="pmatList"></div>
+      <button class="btn preset-add" id="pmatAdd" type="button">＋ 材料を追加</button>
+      <div class="psec-h">材料セット <span class="hint">（術式ごとに材料チップを切替えられます。編集中は材料一覧が「選択中のセット」の中身です）</span></div>
+      <div id="pmsetList"></div>
+      <button class="btn preset-add" id="pmsetDup" type="button">＋ 今のセットを複製して新しいセットを作る</button>
       <div class="frm-actions">
         <button class="btn" data-close="presetModal" type="button">キャンセル</button>
         <button class="btn btn-primary" id="presetSave" type="button">保存</button>
@@ -561,6 +690,8 @@ header{
   <table id="pVitals"></table>
   <h2>イベント・薬剤投与</h2>
   <table id="pEvents"></table>
+  <h2>使用材料</h2>
+  <table id="pMats"></table>
   <div id="pPhotoSec" style="display:none">
     <h2>添付モニター写真</h2>
     <div class="phs" id="pPhotos"></div>
@@ -576,9 +707,10 @@ const pad=n=>String(n).padStart(2,'0');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const KEY='anes-record-v1';
-const DEFAULTS={hr:100,spo2:95,nibpS:120,nibpD:60,rr:60,etco2:35,temp:37.5,anes:2.0};
-const RANGES={hr:[0,300,1],spo2:[0,100,1],etco2:[0,100,1],rr:[0,300,1],nibpS:[0,300,1],nibpD:[0,300,1],temp:[32,43,0.1],anes:[0,8,0.1]};
-const VLABEL={hr:'心拍数 HR /分',spo2:'SpO2 %',etco2:'EtCO2 mmHg',rr:'呼吸数 RR /分',nibpS:'血圧 SYS mmHg',nibpD:'血圧 DIA mmHg',temp:'体温 ℃',anes:'吸入麻酔濃度 %'};
+const DEFAULTS={hr:100,spo2:95,nibpS:120,nibpD:60,rr:60,etco2:35,temp:37.5,anes:2.0,fluidtotal:10};
+const RANGES={hr:[0,300,1],spo2:[0,100,1],etco2:[0,100,1],rr:[0,300,1],nibpS:[0,300,1],nibpD:[0,300,1],temp:[32,43,0.1],anes:[0,8,0.1],fluidtotal:[1,20,1]};
+let bpMode=localStorage.getItem('anes-bpmode')||'NIBP';
+const VLABEL={hr:'心拍数 HR /分',spo2:'SpO2 %',etco2:'EtCO2 mmHg',rr:'呼吸数 RR /分',nibpS:bpMode+' SYS mmHg',nibpD:bpMode+' DIA mmHg',temp:'体温 ℃',anes:'吸入麻酔濃度 %'};
 const STEPS={hr:1,spo2:1,etco2:1,rr:1,nibpS:1,nibpD:1,temp:0.1,anes:0.1};
 const VKEYS=Object.keys(DEFAULTS);
 const fmtV=(k,v)=>(k==='temp'||k==='anes')?Number(v).toFixed(1):String(Math.round(v));
@@ -594,7 +726,7 @@ function lastRecVals(){
 
 const state={
   caseInfo:{owner:'',name:'',species:'—',breed:'',sex:'—',age:'',weight:'',date:'',proc:'',vet:'',recorder:''},
-  records:[], events:[], photos:[],
+  records:[], events:[], photos:[], gauze:{log:[]}, fluid:{name:null,total:''},
   timer:{t0:null, accum:0, running:false, started:false, beepedMin:null}
 };
 const STEP=5*60; // 秒
@@ -634,9 +766,21 @@ function beep(){
 function startPause(){
   ensureAudio();
   const t=state.timer;
-  if(t.running){ t.accum+=Date.now()-t.t0; t.running=false; $('#startBtn').textContent='再開'; }
-  else{ t.t0=Date.now(); t.running=true; t.started=true; $('#startBtn').textContent='一時停止'; hideChartEmpty(); }
-  drawChart(); save();
+  if(t.running){
+    t.accum+=Date.now()-t.t0; t.running=false; $('#startBtn').textContent='再開';
+    const gc=gauzeCount();
+    if(gc.inB>0){ gzAlert=true; beep(); toast('⚠ ガーゼが体内に'+gc.inB+'枚 残っています'); }
+  }
+  else{
+    if(!t.started){
+      t.t0=Date.now(); t.running=true; t.started=true; $('#startBtn').textContent='一時停止'; hideChartEmpty();
+      addEvent('導入',{type:'event'});
+      renderGauze(); drawChart(); save();
+      askInduction(); return;
+    }
+    t.t0=Date.now(); t.running=true; $('#startBtn').textContent='一時停止'; hideChartEmpty();
+  }
+  renderGauze(); drawChart(); save();
 }
 function nextRemain(){
   const last=state.records.length? state.records[state.records.length-1].t : 0;
@@ -681,7 +825,7 @@ function drawChart(cv,theme,wOpt,hOpt){
   const PL=110,PR=52,PT=20,PB=6;
   const xMax=Math.max(30, Math.ceil(Math.max(elapsedMin(), state.records.length?state.records[state.records.length-1].t:0)/5)*5);
   const X=t=>PL+(t/xMax)*(w-PL-PR);
-  const hRow=17, rowsN=4, hEvt=50, hTable=rowsN*hRow+8, hTot=h-PT-PB;
+  const hRow=17, rowsN=4, hEvt=Math.max(72, Math.min(140, state.events.length*16)), hTable=rowsN*hRow+8, hTot=h-PT-PB;
   const hGraph=hTot-hTable-hEvt-4;
   const hasCRI=state.events.some(e=>e.inf&&!((((infRates(e)[0]||{}).unit)||e.unit||'').includes('mL'))&&infRates(e).some(r=>!isNaN(parseFloat(r.doseStr!=null?r.doseStr:r.dose))));
   const mainH=hasCRI? Math.round(hGraph*0.70) : hGraph;
@@ -700,6 +844,18 @@ function drawChart(cv,theme,wOpt,hOpt){
   }
   for(let m=60;m<xMax;m+=60){ ctx.strokeStyle='rgba(90,140,170,.55)'; ctx.lineWidth=1.4;
     ctx.beginPath();ctx.moveTo(X(m),gY);ctx.lineTo(X(m),gY+hGraph);ctx.stroke(); ctx.lineWidth=1; }
+  // ベンチ(人工呼吸)区間の帯
+  (()=>{ const bs=[]; let on=null;
+    state.events.forEach(e=>{ if(e.type!=='event')return;
+      if(e.label==='ベンチ ON')on=e.t;
+      else if(e.label==='ベンチ OFF'&&on!=null){ bs.push([on,e.t]); on=null; } });
+    if(on!=null)bs.push([on,Math.max(elapsedMin(),state.records.length?state.records[state.records.length-1].t:0)]);
+    window.__benchSpans=bs;
+    bs.forEach(b=>{ const x1=X(b[0]),x2=Math.max(X(b[1]),x1+2);
+      ctx.fillStyle='rgba(69,130,224,.13)'; ctx.fillRect(x1,gY,x2-x1,hGraph);
+      ctx.fillStyle='rgba(69,130,224,.85)'; ctx.font='600 8px -apple-system,sans-serif'; ctx.textAlign='left';
+      ctx.fillText('人工呼吸',x1+3,gY+10); });
+  })();
   ctx.strokeStyle=C.frame; ctx.strokeRect(PL,gY,w-PL-PR,hGraph);
   if(hasCRI){ ctx.beginPath();ctx.moveTo(PL,criY0);ctx.lineTo(w-PR,criY0);ctx.stroke(); }
   // 横罫線(20刻み)と左軸数値
@@ -810,6 +966,7 @@ function drawChart(cv,theme,wOpt,hOpt){
       const end=ev.inf.end!=null?ev.inf.end:1e9;
       rs.forEach((rr,i)=>{ const s=rr.t, e=i<rs.length-1?rs[i+1].t:end; if(tt>=s&&tt<e)v=(rr.doseStr!=null?rr.doseStr:rr.dose); });
     });
+    if(v!=null&&state.fluid&&state.fluid.name)return state.fluid.name+' '+v;
     return v;
   }
   const rows=[['SpO2 (%)',r=>r.spo2],['EtCO2 (mmHg)',r=>r.etco2],['呼気麻酔 (%)',r=>r.anes],['輸液 (mL/hr)',r=>infValAt(r.t)]];
@@ -886,6 +1043,7 @@ function updateMap(){
 ['nibpS','nibpD'].forEach(k=>$('#in-'+k).addEventListener('input',updateMap));
 
 /* Enterで次の項目へ移動（最後は記録ボタンへ） */
+const BENCH_TAB={k:'rr',label:'人工呼吸（ベンチ）'};
 const VORDER=['hr','spo2','etco2','rr','nibpS','nibpD','temp','anes'];
 VORDER.forEach((k,i)=>{
   const inp=$('#in-'+k);
@@ -933,6 +1091,7 @@ function openPicker(k){
     wheel.scrollTop=idx*44;
     pwIgnoreUntil=Date.now()+600;
   });
+  setTimeout(()=>{ const pd=$('#pwDirect'); if(pd&&$('#pickerModal').classList.contains('show'))pd.focus(); },80);
 }
 function pwApply(){
   const wheel=$('#pwWheel');
@@ -946,6 +1105,7 @@ function pwApply(){
   return prev!==val;
 }
 function pwAdvance(){
+  if(pwField==='fluidtotal'){ $('#pickerModal').classList.remove('show'); toast('総流量を '+((state.fluid&&state.fluid.total)||'10')+'mL/kg/hr に設定しました'); return; }
   const next=VORDER[VORDER.indexOf(pwField)+1];
   if(next){ openPicker(next); }
   else{ $('#pickerModal').classList.remove('show'); toast('入力完了 —「この内容で記録」で記録できます'); }
@@ -954,6 +1114,20 @@ $('#pwWheel').addEventListener('scroll',()=>{
   if(Date.now()<pwIgnoreUntil)return;
   clearTimeout(pwScrollTm);
   pwScrollTm=setTimeout(pwApply,280);
+});
+$('#pwDirect').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  $('#pwDirect').focus();
+  const v=parseFloat($('#pwDirect').value);
+  if(!isNaN(v)){
+    const [mn,mx]=RANGES[pwField];
+    if(pwDec)$('#in-'+pwField).value=clamp(v,mn,mx).toFixed(1);
+    else $('#in-'+pwField).value=String(Math.round(clamp(v,mn,mx)));
+    $('#in-'+pwField).dispatchEvent(new Event('input'));
+  }else pwApply();
+  pwAdvance();
+  setTimeout(()=>{ const pd=$('#pwDirect'); if(pd&&$('#pickerModal').classList.contains('show')){ pd.value=''; pd.focus(); } },60);
 });
 $('#pwSet').addEventListener('click',()=>{
   const v=parseFloat($('#pwDirect').value);
@@ -966,6 +1140,7 @@ $('#pwSet').addEventListener('click',()=>{
     pwApply();
   }
   pwAdvance();
+  setTimeout(()=>{ const pd=$('#pwDirect'); if(pd&&$('#pickerModal').classList.contains('show')){ pd.value=''; pd.focus(); } },60);
 });
 $('#pwWheel').addEventListener('click',e=>{
   const it=e.target.closest('.pw-item'); if(!it||!pwField)return;
@@ -1014,7 +1189,7 @@ function saveUsage(){ try{ localStorage.setItem(USAGE_KEY,JSON.stringify(usageMa
 function bumpUsage(name){ if(!name)return; usageMap[name]=(usageMap[name]||0)+1; saveUsage(); }
 function decUsage(name){ if(!name)return; usageMap[name]=Math.max(0,(usageMap[name]||0)-1); saveUsage(); }
 const PRESET_KEY='anes-presets-v1';
-const EV_DEFAULTS=['導入','挿管','体位変換','切皮','臓器牽引','止血確認','閉創','抜管','覚醒','レントゲン撮影','輸血開始','カテーテル設置'];
+const EV_DEFAULTS=['導入','挿管','体位変換','切皮','臓器牽引','止血確認','ベンチ ON','ベンチ OFF','閉創','Iso-OFF','抜管','覚醒','レントゲン撮影','輸血開始','カテーテル設置'];
 const DRUG_DEFAULTS=['ブトルファノール','ミダゾラム','メデトミジン','プロポフォール','アトロピン','エピネフリン','フェニルエフリン','ドパミン','乳酸リンゲル液','生理食塩水','マンニトール','フロセミド'];
 const ROUTE_OPTS=['IV 静注','IM 筋注','SC 皮下','点滴（持続）','CRI（持続静注）','気管内','局所','経口'];
 const CRI_DEFAULTS=[
@@ -1033,19 +1208,36 @@ const CONC_DEFAULTS=[
 const OLD_CONC_SIG='ドパミン|1|mg/mL|リドカイン|20|mg/mL|フェンタニル|50|µg/mL';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+/* ==== 院の標準プリセット（ユーザー書き出し分 2026-11-24(2)）==== */
+const STD_PRESETS={"events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位,腹臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpled1a","label":"切皮"},{"id":"mwuuyplzkejem","label":"切開","opts":"胃,小腸,大腸,膀胱,尿管"},{"id":"mwpatntpsvnqk","label":"臓器牽引"},{"id":"mwuv1qa1j9gay","label":"摘出","opts":"異物,腫瘍,脾臓,胆嚢,腎臓,子宮卵巣,精巣,膀胱結石,尿管結石"},{"id":"mwpatntpxrxl1","label":"止血確認"},{"id":"mwuv69tlo05ku","label":"カテーテル設置","opts":"ドレーン,胃瘻,食道瘻,経鼻,尿道,尿管,腎瘻"},{"id":"mwpatntpol7vi","label":"閉創"},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}],"drugs":[{"id":"mwpatntp5d67z","name":"ドパミン","dose":"1","doses":["1","3","5","10","15","20"],"unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntp6ygrx","name":"ドブタミン","dose":"1","doses":["1","2.5","5","10","15","205","10"],"unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntpfp9ir","name":"ノルアドレナリン","dose":"0.1","doses":["0.1","0.2","0.5","0.7","1.0"],"unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntp47v70","name":"バソプレシン","dose":"0.001","doses":["0.001","0.002","0.003"],"unit":"U/kg/min","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntp5e27g","name":"アクトシン","dose":"20","doses":["20"],"unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntp6nfz1","name":"フェンタニル","dose":"1","doses":["1","3","5","10"],"unit":"µg/kg/hr","perKg":true,"route":"CRI（持続静注）"},{"id":"mwpatntq1keks","name":"ブトルファノール","dose":"0.2","unit":"mg/kg","perKg":true,"route":"IV 静注","doses":["0.2"]},{"id":"mwpatntqlqtla","name":"ミダゾラム","dose":"0.2","unit":"mg/kg","perKg":true,"route":"IV 静注","doses":["0.2"]},{"id":"mwpatntq9b148","name":"メデトミジン","dose":"0.25","unit":"µg/kg","perKg":true,"route":"IV 静注","doses":["0.25","0.5"]},{"id":"mwpatntql540k","name":"プロポフォール","dose":"","unit":"","perKg":false,"route":"","doses":[]},{"id":"mwpatntqsxf0f","name":"アトロピン","dose":"10","unit":"µg/kg","perKg":true,"route":"IV 静注","doses":["10","20","25","50"]},{"id":"mwpatntqe89bo","name":"アドレナリン(CRI)","dose":"0.1","unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）","doses":["0.1","0.3","0.5","0.7","1.0"]},{"id":"mwpatntqqhtle","name":"フロセミド","dose":"1","unit":"mg/kg","perKg":true,"route":"IV 静注","doses":["1","2"]},{"id":"mwq200dqnpevz","name":"ブプレノルフィン","dose":"10","doses":["10","20"],"unit":"µg/kg","perKg":true,"route":"IV 静注"},{"id":"mwq218uj03mzb","name":"2％リドカイン","dose":"0.1","doses":["0.1"],"unit":"mg/kg","perKg":true,"route":"IV 静注"},{"id":"mwq2apm390qwo","name":"エフェドリン","dose":"25","doses":["25","50","100"],"unit":"µg/kg","perKg":true,"route":"IV 静注"},{"id":"mwt10d0c9y9n8","name":"アドレナリン","dose":"0.01","doses":["0.01"],"unit":"mg/kg","perKg":true,"route":"IV 静注"},{"id":"mwt137h9100i7","name":"アドレナリンCRI","dose":"0.1","doses":["0.1","0.3","0.5","0.7","1"],"unit":"µg/kg/min","perKg":true,"route":"CRI（持続静注）"}],"concs":[{"id":"mwpatntqya55u","name":"ドパミン","val":"0.24","unit":"mg/mL"},{"id":"mwpatntqb0suf","name":"ドブタミン","val":"0.24","unit":"mg/mL"},{"id":"mwpatntqq4cyg","name":"ノルアドレナリン","val":"0.1","unit":"mg/mL"},{"id":"mwpatntqe6dg3","name":"バソプレシン","val":"2","unit":"U/mL"},{"id":"mwpatntq68x32","name":"アクトシン","val":"1.2","unit":"mg/mL"},{"id":"mwpatntqb74pm","name":"フェンタニル","val":"5","unit":"µg/mL"},{"id":"mwt167q42f1s0","name":"アドレナリン","val":"0.1","unit":"mg/mL"},{"id":"mwt17qlkcp6ly","name":"ナファモスタット","val":"0.2","unit":"mg/mL"},{"id":"mwt1ceol6ptrp","name":"FOY","val":"2","unit":"mg/mL"},{"id":"mwt1d76jq7612","name":"hANP","val":"3","unit":"µg/mL"},{"id":"mwu2wmsdlk3u7","name":"アドレナリンCRI","val":"0.1","unit":"mg/mL"},{"id":"mwu2y9gfw7hi5","name":"ブトルファノール","val":"5","unit":"mg/mL"},{"id":"mwu2yf9nk4me8","name":"ミダゾラム","val":"5","unit":"mg/mL"},{"id":"mwu2ynjr3zp88","name":"メデトミジン","val":"10","unit":"µg/mL"},{"id":"mwu2zj8jpbl5k","name":"プロポフォール","val":"10","unit":"mg/mL"},{"id":"mwu30ibidouc1","name":"アトロピン","val":"0.5","unit":"mg/mL"},{"id":"mwu31fnj3cry3","name":"フロセミド","val":"10","unit":"mg/mL"},{"id":"mwu325lctyvvb","name":"ブプレノルフィン","val":"0.2","unit":"mg/mL"},{"id":"mwu33ipewxijb","name":"2％リドカイン","val":"20","unit":"mg/mL"},{"id":"mwu33txknx6oe","name":"エフェドリン","val":"1","unit":"mg/mL"}],"fluids":[{"id":"mwpatntqibxkx","name":"乳酸リンゲル液"},{"id":"mwpatntqfnf72","name":"酢酸リンゲル液"},{"id":"mwpatntqgmyz1","name":"生理食塩水"},{"id":"mwpatntqjncki","name":"5%ブドウ糖液"},{"id":"mwu35yp2wlw6m","name":"ソルデム1号"}],"mats":[{"id":"mwpatntqqf66q","name":"ディスポドレープ","opts":"60,90,120"},{"id":"mwpatntq0pws2","name":"布ドレープ","opts":"丸穴,四角小,四角大,無窓,無窓大"},{"id":"mwpatntqcnih3","name":"アイオバン","opts":"小,大"},{"id":"mwpatntqosd6n","name":"ガーゼ","opts":""},{"id":"mwpatntqm9z3n","name":"綿棒","opts":""},{"id":"mwpatntqopofc","name":"止血剤","opts":"サージセル,VETSPON"},{"id":"mwpatntqg2ho9","name":"ヘモクリップ","opts":"ML,L"},{"id":"mwucpolk92tvy","name":"メッシュ","opts":"ウルトラプロメッシュ,プロリンメッシュ,ベテキチン"}],"matSets":[{"id":"mwpatntq4267m","name":"標準","mats":[{"id":"mwpatntqqf66q","name":"ディスポドレープ","opts":"60,90,120"},{"id":"mwpatntq0pws2","name":"布ドレープ","opts":"丸穴,四角小,四角大,無窓,無窓大"},{"id":"mwpatntqcnih3","name":"アイオバン","opts":"小,大"},{"id":"mwpatntqosd6n","name":"ガーゼ","opts":""},{"id":"mwpatntqm9z3n","name":"綿棒","opts":""},{"id":"mwpatntqopofc","name":"止血剤","opts":"サージセル,VETSPON"},{"id":"mwpatntqg2ho9","name":"ヘモクリップ","opts":"ML,L"},{"id":"mwucpolk92tvy","name":"メッシュ","opts":"ウルトラプロメッシュ,プロリンメッシュ,ベテキチン"}]},{"id":"mwucx8x5m8vfi","name":"ドレープ","mats":[{"id":"mwpatntqqf66q","name":"ディスポドレープ","opts":"60×60,90×90,120×120"},{"id":"mwpatntq0pws2","name":"アイオバン","opts":"小,大"},{"id":"mwpatntqcnih3","name":"滅菌べトラップ","opts":""},{"id":"mwpatntqosd6n","name":"ステープラ","opts":"ノーマル,ワイド"},{"id":"mwpatntqm9z3n","name":"サプライロン","opts":""}]},{"id":"mwucxk8kp7nr2","name":"縫合糸","mats":[{"id":"mwpatntqqf66q","name":"PDS","opts":"0,2-0,3-0,4-0,5-0,6-0,7-0,8−0"},{"id":"mwpatntq0pws2","name":"モノクリル","opts":"3−0,4−0,5−0,6−0,7−0"},{"id":"mwpatntqcnih3","name":"サプライロン","opts":""},{"id":"mwpatntqosd6n","name":"バイクリル","opts":"2−0,3−0,4−0,5−0,6−0,7−0,8−0,9−0"},{"id":"mwpatntqm9z3n","name":"エムソーブ","opts":"2−0,3−0,4−0,5−0"},{"id":"mwpatntqopofc","name":"マニーナイロン","opts":"6−0,7−0,8−0,9−0"},{"id":"mwpatntqg2ho9","name":"サージロン","opts":"2−0,3−0"},{"id":"mwucpolk92tvy","name":"3号ナイロン","opts":""},{"id":"mwucremv9hwzh","name":"ファイバーワイヤー","opts":"0,2−0,3−0"}]},{"id":"mwufopqvv1dkf","name":"カテーテル","mats":[{"id":"mwpatntqqf66q","name":"栄養カテーテル","opts":"3Fr,4Fr,5Fr,6Fr,7Fr,8Fr"},{"id":"mwpatntq0pws2","name":"バルーンカテーテル","opts":"4.5Fr,5Fr,6Fr,8Fr"},{"id":"mwpatntqcnih3","name":"栄養カテーテル（新規格）","opts":"12Fr,14Fr,16Fr"},{"id":"mwpatntqosd6n","name":"PEGチューブ","opts":"16Fr,20Fr"},{"id":"mwpatntqm9z3n","name":"ドレーン","opts":"ストレート,フラット,J-VACスタンダード,J-VACバルブ"},{"id":"mwpatntqopofc","name":"SUBシステム","opts":""},{"id":"mwpatntqg2ho9","name":"尿管ステント","opts":"2.1Fr,2.5Fr"},{"id":"mwucpolk92tvy","name":"経皮腎瘻カテーテル","opts":""}]},{"id":"mwuu81r1myl30","name":"インプラント","mats":[{"id":"mwpatntqqf66q","name":"Kワイヤー","opts":"0.6,0.8,0.9,1.0,1.1,1.2,1.5,1.8,2.0"},{"id":"mwpatntq0pws2","name":"スタイマンピン","opts":"1.6,2.0,2.4,2.8,3.2,4.0,4.8,6.4"},{"id":"mwpatntqcnih3","name":"DCPプレート","opts":"1.1,1.3,1.5,2.0,2.4,2.7"},{"id":"mwpatntqosd6n","name":"LCPプレート","opts":"1.5,2.0,2.4,2.7,3.5"},{"id":"mwpatntqm9z3n","name":"TPLOプレート","opts":"1.5,2.0,2.4,2.7,3.5"},{"id":"mwpatntqopofc","name":"ロッキングスクリュー","opts":"６,7,8,9,10,11,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50"},{"id":"mwpatntqg2ho9","name":"コーティカルスクリュー","opts":"６,7,8,9,10,11,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50"},{"id":"mwucpolk92tvy","name":"キャンセラススクリュー","opts":"６,7,8,9,10,11,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50"},{"id":"mwuunm8lcskr8","name":"サークラージワイヤー","opts":"0.6,0.8,1.0,1.2"},{"id":"mwuusyh0i1uyb","name":"3号ナイロン","opts":""},{"id":"mwuut4sa5qyyd","name":"ファイバーワイヤー","opts":"0,2-0,3-0"}]}],"matActive":"mwpatntq4267m","evSets":[{"id":"mwpatntqlzz96","name":"標準","events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位,腹臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpled1a","label":"切皮"},{"id":"mwuuyplzkejem","label":"切開","opts":"胃,小腸,大腸,膀胱,尿管"},{"id":"mwpatntpsvnqk","label":"臓器牽引"},{"id":"mwuv1qa1j9gay","label":"摘出","opts":"異物,腫瘍,脾臓,胆嚢,腎臓,子宮卵巣,精巣,膀胱結石,尿管結石"},{"id":"mwpatntpxrxl1","label":"止血確認"},{"id":"mwuv69tlo05ku","label":"カテーテル設置","opts":"ドレーン,胃瘻,食道瘻,経鼻,尿道,尿管,腎瘻"},{"id":"mwpatntpol7vi","label":"閉創"},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}]},{"id":"mwu36eko6fej2","name":"歯科処置","events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位,腹臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpled1a","label":"歯科レントゲン"},{"id":"mwpatntpsvnqk","label":"スケーリング"},{"id":"mwpatntpxrxl1","label":"ポリッシング"},{"id":"mwpatntpol7vi","label":"乳歯抜歯","opts":"501,502,503,504,506,507,508,601,602,603,604,606,607,608,701,702,703,704,706,707,708,801,802,803,804,806,807,808"},{"id":"mwu38rpjntfs4","label":"永久歯抜歯","opts":"101,102,103,104,105,106,107,108,109,110,201,202,203,204,205,206,207,208,209,210,301,302,303,304,305,306,307,308,309,310,311,401,402,403,404,405,406,407,408,409,410,411"},{"id":"mwu3i2htv81b8","label":"フラップ形成","opts":"1C,2C,3C,4C"},{"id":"mwu3m5vd2k3ta","label":"歯肉縫合","opts":"1I,1C,1PM,1M,2I,2C,2PM,2M,3I,3C,3PM,3M,4I,4C,4PM,4M"},{"id":"mwu3osxkzq4ju","label":"歯肉デブリード","opts":"1I,1C,1PM,1M,2I,2C,2PM,2M,3I,3C,3PM,3M,4I,4C,4PM,4M"},{"id":"mwu3tu99nluru","label":"ミノサイクリン塗布","opts":""},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}]},{"id":"mwu4823piblc4","name":"避妊去勢","events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位腹,臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpled1a","label":"切皮"},{"id":"mwpatntpsvnqk","label":"精巣摘出","opts":"右,左,右皮下,左皮下,右腹腔内,左腹腔内"},{"id":"mwu49yh9h6x2n","label":"卵巣摘出","opts":"右,左"},{"id":"mwu4ck8qtneih","label":"子宮卵巣摘出","opts":""},{"id":"mwpatntpxrxl1","label":"止血確認"},{"id":"mwpatntpol7vi","label":"閉創"},{"id":"mwu48lgg2ssnn","label":"乳歯抜歯","opts":"501,502,503,504,506,507,508,601,602,603,604,606,607,608,701,702,703,704,706,707,708,801,802,803,804,806,807,808"},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}]},{"id":"mwu4dufpvwlwj","name":"整形外科","events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位,腹臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpsvnqk","label":"神経ブロック","opts":"右坐骨,左坐骨,右鼠径大腿,左鼠径大腿"},{"id":"mwu5c2gdcwhvp","label":"Cアーム","opts":""},{"id":"mwpatntpled1a","label":"切皮","opts":"RF,LF,RR,LR"},{"id":"mwu4ck8qtneih","label":"インプラント設置","opts":"K‐ワイヤー,DCP,LCP,TPLO,IM,サークラージワイヤー"},{"id":"mwpatntpxrxl1","label":"洗浄"},{"id":"mwpatntpol7vi","label":"閉創"},{"id":"mwu4n8vy614nx","label":"被覆処置","opts":"RJ包帯,メロリン‐テガダーム,副子固定"},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}]},{"id":"mwu6gj6kz5ytw","name":"内視鏡検査","events":[{"id":"mwpatntp3tk17","label":"導入","opts":"Prop,Alfax,Med,Iso"},{"id":"mwpatntpm101k","label":"挿管","opts":"3,3.5,4.0,4.5,5,6,7,8,9,10,11,12,Vgel1,Vgel2,Vgel3"},{"id":"mwpatntp2dm5e","label":"体位変換","opts":"仰臥位,腹臥位,右側臥位,左側臥位,ジャックナイフ"},{"id":"mwpatntpsvnqk","label":"内視鏡検査","opts":"上部,下部,鼻咽頭,鼻腔,気管"},{"id":"mwu5c2gdcwhvp","label":"上部消化管生検","opts":"十二指腸,幽門部,胃体部,噴門部"},{"id":"mwpatntpled1a","label":"下部消化管生検","opts":"回腸,上行結腸,横行結腸,下行結腸,直腸"},{"id":"mwu4ck8qtneih","label":"異物摘出","opts":""},{"id":"mwpatntpxrxl1","label":"浣腸"},{"id":"mwu4n8vy614nx","label":"スクラルファート注入","opts":""},{"id":"mwu6m5ay7e7ns","label":"バルーン拡張","opts":"鼻咽頭,食道,幽門,噴門,直腸"},{"id":"mwpatntps1lh1","label":"Iso-OFF"},{"id":"mwpatntpic14w","label":"抜管"},{"id":"mwpatntp9i1vh","label":"ヘッドアップ"}]}],"evActive":"mwpatntqlzz96"};
+
 function loadPresets(){
   try{
     const d=JSON.parse(localStorage.getItem(PRESET_KEY)||'null');
-    if(d&&Array.isArray(d.events)&&Array.isArray(d.drugs)){
+    if(d&&Array.isArray(d.events)&&Array.isArray(d.drugs)&&d.events.length){
       state.presets=d;
       if(!Array.isArray(state.presets.concs))state.presets.concs=CONC_DEFAULTS.map(c=>Object.assign({id:uid()},c));
+      if(!Array.isArray(state.presets.fluids)||!state.presets.fluids.length)state.presets.fluids=FLUID_DEFAULTS.map(n=>({id:uid(),name:n}));
+      if(!Array.isArray(state.presets.mats))state.presets.mats=MAT_DEFAULTS.map(n=>({id:uid(),name:n,opts:''}));
+      if(!Array.isArray(state.presets.matSets)||!state.presets.matSets.length){ state.presets.matSets=[{id:uid(),name:'標準',mats:state.presets.mats}]; state.presets.matActive=state.presets.matSets[0].id; }
       if(state.presets.drugs.map(x=>x.name).join('|')===DRUG_DEFAULTS.join('|'))state.presets.drugs=defaultDrugList();
       if(state.presets.drugs.map(x=>x.name+'|'+(x.dose||'')+'|'+(x.unit||'')).join('|')===ABS_SIG)state.presets.drugs=defaultDrugList();
       if(state.presets.concs.map(x=>x.name+'|'+x.val+'|'+x.unit).join('|')===OLD_CONC_SIG)state.presets.concs=CONC_DEFAULTS.map(c=>Object.assign({id:uid()},c));
+      if(!state.presets.events.some(x=>x.label==='Iso-OFF'))state.presets.events.push({id:uid(),label:'Iso-OFF'});
+      state.presets.events.forEach(x=>{ if(x.label==='体位変換'&&!x.opts)x.opts=POSITIONS.join(','); });
+      if(!state.presets.events.some(x=>x.label==='ベンチ ON')){ const ci=state.presets.events.findIndex(x=>x.label==='閉創'); const at=ci>=0?ci:state.presets.events.length; state.presets.events.splice(at,0,{id:uid(),label:'ベンチ ON'}); state.presets.events.splice(state.presets.events.findIndex(x=>x.label==='ベンチ ON')+1,0,{id:uid(),label:'ベンチ OFF'}); }
+
+      savePresets();
       return;
     }
   }catch(e){}
-  state.presets={events:EV_DEFAULTS.map(l=>({id:uid(),label:l})),drugs:defaultDrugList(),concs:CONC_DEFAULTS.map(c=>Object.assign({id:uid()},c))};
+  if(typeof STD_PRESETS!=='undefined'&&STD_PRESETS&&STD_PRESETS.evSets&&STD_PRESETS.evSets.length){
+    state.presets=JSON.parse(JSON.stringify(STD_PRESETS));
+    if(!Array.isArray(state.presets.events)||!state.presets.events.length)state.presets.events=EV_DEFAULTS.map(l=>({id:uid(),label:l}));
+  }else{
+state.presets={events:EV_DEFAULTS.map(l=>({id:uid(),label:l})),drugs:defaultDrugList(),concs:CONC_DEFAULTS.map(c=>Object.assign({id:uid()},c)),fluids:FLUID_DEFAULTS.map(n=>({id:uid(),name:n})),mats:MAT_DEFAULTS.map(n=>({id:uid(),name:n,opts:''}))};
+  }
+  try{ if(d&&Array.isArray(d.events)&&!d.events.length) savePresets(); }catch(e2){}
 }
 function savePresets(){ try{ localStorage.setItem(PRESET_KEY,JSON.stringify(state.presets)); }catch(e){} }
 function defaultDrugList(){
@@ -1075,9 +1267,11 @@ function oneTouchDrug(p){
 }
 let drugsSorted=[];
 function renderChips(){
-  $('#eventChips').innerHTML = state.presets.events.length
-    ? state.presets.events.map(p=>'<button class="chip" type="button" data-ev="'+esc(p.label)+'">'+esc(p.label)+'</button>').join('')
-    : '<span class="hint">イベントのプリセット未登録 —「プリセット編集」から追加できます</span>';
+  const evs=activeSet().events;
+  const sb=$('#evSetBtn'); if(sb)sb.textContent='セット: '+(activeSet().name||'無名');
+  $('#eventChips').innerHTML = evs.length
+    ? evs.map(p=>'<button class="chip" type="button" data-ev="'+esc(p.label)+'">'+esc(p.label)+'</button>').join('')
+    : '<span class="hint">イベントのプリセット未登録 —「プリセット編集」から追加できます（サブ選択肢をカンマ区切りで登録すると、タップ時に選択モーダルが出ます）</span>';
   const darr=state.presets.drugs.map((p,i)=>({p,i}));
   if(chipSortMode==='usage')darr.sort((a,b)=>(usageMap[b.p.name]||0)-(usageMap[a.p.name]||0)||a.i-b.i);
   drugsSorted=darr.map(x=>x.p);
@@ -1086,7 +1280,18 @@ function renderChips(){
       const u=usageMap[p.name]||0;
       return '<button class="chip drug" type="button" data-didx="'+i+'"'+((p.route||u)?' title="'+esc([p.route,u?'使用'+u+'回':null].filter(Boolean).join('・'))+'"':'')+'>'+esc(p.name)+(dl?' <span class="d">'+esc(dl)+'</span>':'')+'</button>';}).join('')
     : '<span class="hint">薬剤のプリセット未登録 —「プリセット編集」から追加できます</span>';
-  $$('#eventChips .chip').forEach(c=>c.addEventListener('click',()=>addEvent(c.dataset.ev,{type:'event'})));
+  $$('#eventChips .chip').forEach(c=>c.addEventListener('click',()=>{
+    const lbl=c.dataset.ev;
+    const pe=state.presets.events.find(x=>x.label===lbl);
+    const opts=((pe&&pe.opts)||'').split(',').map(x=>x.trim()).filter(Boolean);
+    if(opts.length){ openEvOpts(lbl,opts); return; }
+    if(lbl==='体位変換'){ openEvOpts(lbl,POSITIONS); return; }
+    addEvent(lbl,{type:'event'});
+    if(lbl==='閉創'||lbl==='Iso-OFF'){
+      const gc=gauzeCount();
+      if(gc.inB>0){ gzAlert=true; beep(); renderGauze(); toast('⚠ ガーゼが体内に'+gc.inB+'枚 残っています'); }
+    }
+  }));
   $$('#drugChips .chip').forEach(c=>c.addEventListener('click',()=>{
     const p=drugsSorted[+c.dataset.didx]||{};
     const dArr=(p.doses||[]).map(String).filter(d=>d.trim()!=='');
@@ -1134,6 +1339,12 @@ $('#dpDetail').addEventListener('click',()=>{
 let presetDraft=null;
 function openPresets(){
   presetDraft=JSON.parse(JSON.stringify(state.presets));
+  if(!Array.isArray(presetDraft.evSets)||!presetDraft.evSets.length)presetDraft.evSets=[{id:uid(),name:'標準',events:presetDraft.events||[]}];
+  if(!presetDraft.evSets.some(x=>x.id===presetDraft.evActive))presetDraft.evActive=presetDraft.evSets[0].id;
+  presetDraft.events=(presetDraft.evSets.find(x=>x.id===presetDraft.evActive)||presetDraft.evSets[0]).events;
+  if(!Array.isArray(presetDraft.matSets)||!presetDraft.matSets.length)presetDraft.matSets=[{id:uid(),name:'標準',mats:presetDraft.mats||[]}];
+  if(!presetDraft.matSets.some(x=>x.id===presetDraft.matActive))presetDraft.matActive=presetDraft.matSets[0].id;
+  presetDraft.mats=(presetDraft.matSets.find(x=>x.id===presetDraft.matActive)||presetDraft.matSets[0]).mats;
   renderPresetDraft();
   $('#presetModal').classList.add('show');
 }
@@ -1142,8 +1353,13 @@ function renderPresetDraft(){
     '<div class="preset-row"><span class="reorder">'+
     '<button data-peup="'+i+'" type="button" aria-label="上へ">↑</button>'+
     '<button data-pedown="'+i+'" type="button" aria-label="下へ">↓</button></span>'+
-    '<input data-pe="'+i+'" value="'+esc(p.label)+'" placeholder="イベント名（例：切皮）">'+
-    '<button class="del" data-pedel="'+i+'" type="button">削除</button></div>').join('');
+    '<input data-pe="'+i+'" value="'+esc(p.label)+'" placeholder="イベント名（例：切皮）" style="flex:9 1 0;min-width:120px">'+
+    '<button class="del" data-pedel="'+i+'" type="button" style="flex:0 0 auto;padding:0 6px">削除</button>'+
+    '<input data-peo="'+i+'" value="'+esc(p.opts||'')+'" placeholder="サブ選択肢（カンマ区切・任意。例：仰臥位,腹臥位,右側臥位）" style="flex-basis:100%;font-size:12px">'+
+    '</div>').join('');
+  $('#pmsetList').innerHTML=(presetDraft.matSets||[]).map((x,i)=>'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><input data-pmsn="'+i+'" style="flex:1" value="'+esc(x.name||'')+'" placeholder="セット名（例：手術）"><button class="del" data-pmsdel="'+i+'" type="button"'+(presetDraft.matSets.length<=1?' style="opacity:.35"':'')+'>削除</button></div>').join('')||'<p class="hint">未登録</p>';
+  $('#pmatList').innerHTML=(presetDraft.mats=Array.isArray(presetDraft.mats)?presetDraft.mats:[]).map((p,i)=>'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap"><input data-pm="'+i+'" style="flex:9 1 0;min-width:120px" value="'+esc(p.name)+'" placeholder="材料名（例：吸収糸）"><button class="del" data-pmdel="'+i+'" type="button">削除</button><input data-pmo="'+i+'" value="'+esc(p.opts||'')+'" placeholder="規格のサブ選択肢（カンマ区切・任意。例：3-0,4-0,5-0）" style="flex-basis:100%;font-size:12px"></div>').join('')||'<p class="hint">未登録</p>';
+  $('#psetList').innerHTML=(presetDraft.evSets||[]).map((x,i)=>'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><input data-psn="'+i+'" style="flex:1" value="'+esc(x.name||'')+'" placeholder="セット名（例：手術）"'+(x.id===presetDraft.evActive?' class="cur"':'')+'><button class="del" data-psdel="'+i+'" type="button"'+(presetDraft.evSets.length<=1?' style="opacity:.35"':'')+'>削除</button></div>').join('')||'<p class="hint">未登録</p>';
   $('#pdList').innerHTML=presetDraft.drugs.map((p,i)=>
     '<div class="preset-row drug"><span class="reorder">'+
     '<button data-pdup="'+i+'" type="button" aria-label="上へ">↑</button>'+
@@ -1159,8 +1375,48 @@ function renderPresetDraft(){
     '<input data-pcv="'+i+'" inputmode="decimal" value="'+esc(p.val||'')+'" placeholder="濃度" style="text-align:right">'+
     '<select data-pcu="'+i+'">'+['mg/mL','µg/mL','%','U/mL'].map(o=>'<option'+((p.unit||'mg/mL')===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'+
     '<button class="del" data-pcdel="'+i+'" type="button">削除</button></div>').join('');
+  $('#pfList').innerHTML=((presetDraft.fluids=Array.isArray(presetDraft.fluids)?presetDraft.fluids:fluidPresets().map(p=>Object.assign({},p))))
+    .map((p,i)=>'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center"><input data-pfn="'+i+'" style="flex:1" value="'+esc(p.name)+'" placeholder="輸液剤名"><button class="btn btn-sm btn-danger" data-pfdel="'+i+'" type="button">削除</button></div>').join('')||'<p class="hint">未登録</p>';
 }
-$('#peList').addEventListener('input',e=>{const i=e.target.dataset.pe; if(i!=null)presetDraft.events[+i].label=e.target.value;});
+$('#pmsetList').addEventListener('input',e=>{const i=e.target.dataset.pmsn; if(i!=null)presetDraft.matSets[+i].name=e.target.value;});
+$('#pmsetList').addEventListener('click',e=>{
+  const di=e.target.dataset.pmsdel; if(di==null)return;
+  if(presetDraft.matSets.length<=1){ toast('最後のセットは削除できません'); return; }
+  const delId=presetDraft.matSets[+di].id;
+  presetDraft.matSets.splice(+di,1);
+  if(presetDraft.matActive===delId){ presetDraft.matActive=presetDraft.matSets[0].id; presetDraft.mats=presetDraft.matSets[0].mats; }
+  renderPresetDraft();
+});
+$('#pmsetDup').addEventListener('click',()=>{
+  const src=presetDraft.matSets.find(x=>x.id===presetDraft.matActive)||presetDraft.matSets[0];
+  const ns={id:uid(),name:(src.name||'無名')+'2',mats:JSON.parse(JSON.stringify(src.mats))};
+  presetDraft.matSets.push(ns); presetDraft.matActive=ns.id; presetDraft.mats=ns.mats;
+  renderPresetDraft();
+  toast('複製しました — 名前と中身を編集してください');
+});
+$('#pmatList').addEventListener('input',e=>{const i=e.target.dataset.pm; if(i!=null)presetDraft.mats[+i].name=e.target.value; const o=e.target.dataset.pmo; if(o!=null)presetDraft.mats[+o].opts=e.target.value;});
+$('#pmatList').addEventListener('click',e=>{const i=e.target.dataset.pmdel; if(i!=null){presetDraft.mats.splice(+i,1);renderPresetDraft();}});
+$('#pmatAdd').addEventListener('click',()=>{ presetDraft.mats=Array.isArray(presetDraft.mats)?presetDraft.mats:[]; presetDraft.mats.push({id:uid(),name:'',opts:''}); renderPresetDraft(); });
+$('#pfList').addEventListener('input',e=>{const i=e.target.dataset.pfn; if(i!=null)presetDraft.fluids[+i].name=e.target.value;});
+$('#pfList').addEventListener('click',e=>{const i=e.target.dataset.pfdel; if(i!=null){presetDraft.fluids.splice(+i,1);renderPresetDraft();}});
+$('#pfAdd').addEventListener('click',()=>{ presetDraft.fluids=Array.isArray(presetDraft.fluids)?presetDraft.fluids:[]; presetDraft.fluids.push({id:uid(),name:''}); renderPresetDraft(); });
+$('#peList').addEventListener('input',e=>{const i=e.target.dataset.pe; if(i!=null)presetDraft.events[+i].label=e.target.value; const o=e.target.dataset.peo; if(o!=null)presetDraft.events[+o].opts=e.target.value;});
+$('#psetList').addEventListener('input',e=>{const i=e.target.dataset.psn; if(i!=null)presetDraft.evSets[+i].name=e.target.value;});
+$('#psetList').addEventListener('click',e=>{
+  const di=e.target.dataset.psdel; if(di==null)return;
+  if(presetDraft.evSets.length<=1){ toast('最後のセットは削除できません'); return; }
+  const delId=presetDraft.evSets[+di].id;
+  presetDraft.evSets.splice(+di,1);
+  if(presetDraft.evActive===delId){ presetDraft.evActive=presetDraft.evSets[0].id; presetDraft.events=presetDraft.evSets[0].events; }
+  renderPresetDraft();
+});
+$('#psetDup').addEventListener('click',()=>{
+  const src=presetDraft.evSets.find(x=>x.id===presetDraft.evActive)||presetDraft.evSets[0];
+  const ns={id:uid(),name:(src.name||'無名')+'2',events:JSON.parse(JSON.stringify(src.events))};
+  presetDraft.evSets.push(ns); presetDraft.evActive=ns.id; presetDraft.events=ns.events;
+  renderPresetDraft();
+  toast('複製しました — 名前と中身を編集してください');
+});
 $('#pdList').addEventListener('input',e=>{
   const t=e.target, i=t.dataset.pd, u=t.dataset.pdu, f=t.dataset.pdf;
   if(i!=null)presetDraft.drugs[+i].name=t.value;
@@ -1203,7 +1459,7 @@ $('#pcAdd').addEventListener('click',()=>{
   const els=$$('#pcList input'); els[els.length-1].focus();
 });
 $('#peAdd').addEventListener('click',()=>{
-  presetDraft.events.push({id:uid(),label:''}); renderPresetDraft();
+  presetDraft.events.push({id:uid(),label:'',opts:''}); renderPresetDraft();
   const els=$$('#peList input'); els[els.length-1].focus();
 });
 $('#pdAdd').addEventListener('click',()=>{
@@ -1214,7 +1470,10 @@ $('#presetSave').addEventListener('click',()=>{
   presetDraft.events=presetDraft.events.filter(p=>p.label.trim()).map(p=>Object.assign({},p,{label:p.label.trim()}));
   presetDraft.drugs=presetDraft.drugs.filter(p=>p.name.trim()).map(p=>{const arr=(p.doses||[]).map(String).filter(d=>d.trim()!=='');return Object.assign({},p,{name:p.name.trim(),dose:(arr[0]||(p.dose||'').trim()),doses:arr,unit:(p.unit||'').trim(),perKg:!!p.perKg&&((arr[0]||(p.dose||'').trim())!==''),route:p.route||''});});
   presetDraft.concs=(presetDraft.concs||[]).filter(p=>p.name.trim()&&(p.val||'').trim()).map(p=>Object.assign({},p,{name:p.name.trim(),val:(p.val||'').trim(),unit:p.unit||'mg/mL'}));
-  state.presets=presetDraft; savePresets(); renderChips();
+  presetDraft.matSets.forEach(x=>{ if(!Array.isArray(x.mats))x.mats=[]; });
+  const am=presetDraft.matSets.find(x=>x.id===presetDraft.matActive);
+  if(am)am.mats=presetDraft.mats||[];
+  state.presets=presetDraft; state.presets.mats=(state.presets.matSets.find(x=>x.id===state.presets.matActive)||{mats:[]}).mats; savePresets(); renderChips();
   $('#presetModal').classList.remove('show');
   toast('プリセットを保存しました（イベント'+state.presets.events.length+'種・薬剤'+state.presets.drugs.length+'種）');
 });
@@ -1228,6 +1487,8 @@ function addEvent(label,extra){
   toast(label+'（'+tStr(ev.t)+'）');
   return ev;
 }
+$('#dGuide').addEventListener('click',()=>{ $('#drugModal').classList.remove('show'); jumpGuide($('#d-name').value.trim()); });
+$('#iGuide').addEventListener('click',()=>{ $('#infModal').classList.remove('show'); jumpGuide((infStartInfo&&infStartInfo.name)||''); });
 $('#customEvAdd').addEventListener('click',()=>{
   const v=$('#customEv').value.trim(); if(!v){toast('イベント内容を入力してください');return;}
   addEvent(v,{type:'event'}); $('#customEv').value='';
@@ -1243,6 +1504,28 @@ $('#drugSave').addEventListener('click',()=>{
   addEvent(name,{type:'drug', dose:dose||null, unit:(dose&&unit)?unit:null, route, memo});
 });
 $$('[data-close]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.close).classList.remove('show')));
+$('#matSetBtn').addEventListener('click',()=>{
+  const ss=matSets();
+  $('#matSetChips').innerHTML=ss.map(x=>'<button class="chip" type="button" data-mset="'+x.id+'"'+(x.id===state.presets.matActive?' style="background:#1a7a4a;color:#fff"':'')+' style="padding:14px 18px">'+esc(x.name||'無名')+'</button>').join('');
+  $$('#matSetChips [data-mset]').forEach(b=>b.addEventListener('click',()=>{
+    state.presets.matActive=b.dataset.mset; savePresets();
+    $('#matSetModal').classList.remove('show');
+    renderMatChips();
+    toast('材料セット: '+(activeMatSet().name||'無名'));
+  }));
+  $('#matSetModal').classList.add('show');
+});
+$('#evSetBtn').addEventListener('click',()=>{
+  const ss=evSets();
+  $('#evSetChips').innerHTML=ss.map(x=>'<button class="chip" type="button" data-evset="'+x.id+'"'+(x.id===state.presets.evActive?' style="background:#1a7a4a;color:#fff"':'')+' style="padding:14px 18px">'+esc(x.name||'無名')+'</button>').join('');
+  $$('#evSetChips [data-evset]').forEach(b=>b.addEventListener('click',()=>{
+    state.presets.evActive=b.dataset.evset; savePresets();
+    $('#evSetModal').classList.remove('show');
+    renderChips(); renderFluid(true);
+    toast('イベントセット: '+(activeSet().name||'無名'));
+  }));
+  $('#evSetModal').classList.add('show');
+});
 
 /* ---------- CRI（持続投与） ---------- */
 const isInfRoute=r=>!!r&&r.includes('持続');
@@ -1288,6 +1571,7 @@ function startInfusion(o){
   state.events.sort((a,b)=>a.t-b.t);
   drawChart(); renderTimeline(); renderInfBar(); save();
   toast(o.name+' CRI 開始（'+tStr(t)+'）');
+  setTimeout(fluidNotify,2100);
 }
 function stopInfusion(id,silent){
   const ev=state.events.find(e=>String(e.id)===String(id));
@@ -1296,6 +1580,7 @@ function stopInfusion(id,silent){
   const c=infCalc(ev,ev.inf.end);
   renderTimeline(); drawChart(); renderInfBar(); save();
   if(!silent)toast('CRI終了：'+ev.label+'　'+(c? c.dur+'・'+c.amt : '時間未計測'));
+  if(!silent)setTimeout(fluidNotify,2100);
 }
 let infEditId=null, infMode='edit', infStartInfo=null;
 function setupConcSel(drugName){
@@ -1358,6 +1643,7 @@ $('#infSave').addEventListener('click',()=>{
   ev.dose=dose; ev.unit=unit; ev.pump=pump; if(memo)ev.memo=memo;
   renderTimeline(); drawChart(); renderInfBar(); save();
   toast('流量を変更しました：'+ev.label+' '+dose+(unit||''));
+  setTimeout(fluidNotify,2100);
 });
 /* 薬用量 ⇔ ポンプ流量 自動換算 */
 function ugPerMl(c,u){ if(u==='%')return c*10000; if(u==='µg/mL'||u==='U/mL')return c; return c*1000; }
@@ -1434,6 +1720,7 @@ function updateInfLive(){
     const c=infCalc(ev,now);
     liveEls[id].amt.textContent=c? c.amt.replace(/^総 /,'') : '—';
   });
+  renderFluid();
 }
 
 /* ---------- undo last drug ---------- */
@@ -1460,6 +1747,271 @@ $('#undoDrug').addEventListener('click',()=>{
   renderTimeline(); drawChart(); save();
   toast('投与を取り消しました（'+last.label+' '+tStr(last.t)+'）');
 });
+
+/* ---------- 導入方式の選択（開始時） ---------- */
+const MAT_DEFAULTS=['縫合糸 3-0','縫合糸 4-0','縫合糸 5-0','血管クリップ','ガイドワイヤー','止血剤（アビテスト）','止血剤（オーサル）'];
+const MAT_QTY=[1,2,3,5,10];
+function renderMatChips(){
+  const mats=activeMatSet().mats.filter(x=>x.name&&String(x.name).trim());
+  const sb=$('#matSetBtn'); if(sb)sb.textContent='セット: '+(activeMatSet().name||'無名');
+  const el=$('#matChips'); if(!el)return;
+  el.innerHTML=mats.length?mats.map(x=>'<button class="chip" type="button" data-mat="'+esc(x.name)+'">'+esc(x.name)+'</button>').join(''):'<span class="hint">材料未登録 —「プリセット編集」から追加できます</span>';
+  $$('#matChips [data-mat]').forEach(c=>c.addEventListener('click',()=>{
+    const mp=activeMatSet().mats.find(x=>x.name===c.dataset.mat);
+    const opts=(((mp&&mp.opts)||'')+'').split(',').map(x=>x.trim()).filter(Boolean);
+    openMatQty(c.dataset.mat,opts);
+  }));
+}
+function matSets(){
+  const P=state.presets;
+  if(!Array.isArray(P.matSets)||!P.matSets.length){ P.matSets=[{id:uid(),name:'標準',mats:Array.isArray(P.mats)?P.mats:[]}]; P.matActive=P.matSets[0].id; }
+  if(!P.matSets.some(x=>x.id===P.matActive))P.matActive=P.matSets[0].id;
+  P.matSets.forEach(x=>{ if(!Array.isArray(x.mats))x.mats=[]; });
+  return P.matSets;
+}
+function activeMatSet(){ const ss=matSets(); return ss.find(x=>x.id===state.presets.matActive)||ss[0]; }
+let matQtyTarget=null, matQtySub=null;
+function openMatQty(name,opts){
+  matQtyTarget=name; matQtySub=null;
+  const askQty=(label)=>{
+    $('#posTitle').textContent=label+' — 数量';
+    $('#posChips').innerHTML=MAT_QTY.map(q=>'<button class="chip" type="button" data-mq="'+q+'" style="padding:16px;font-size:18px">×'+q+'</button>').join('');
+    $$('#posChips [data-mq]').forEach(b=>b.addEventListener('click',()=>{
+      $('#posModal').classList.remove('show');
+      addEvent(label+' ×'+b.dataset.mq,{type:'mat',qty:+b.dataset.mq});
+    }));
+    $('#posModal').classList.add('show');
+  };
+  if(opts&&opts.length){
+    $('#posTitle').textContent=name+' — 規格を選択';
+    $('#posChips').innerHTML=opts.map(o=>'<button class="chip" type="button" data-msub="'+esc(o)+'" style="padding:16px;font-size:17px">'+esc(o)+'</button>').join('');
+    $$('#posChips [data-msub]').forEach(b=>b.addEventListener('click',()=>{
+      matQtySub=b.dataset.msub;
+      askQty(name+'（'+matQtySub+'）');
+    }));
+    $('#posModal').classList.add('show');
+  }else askQty(name);
+}
+const IND_OPTIONS=['Prop','Alfax','Med','Iso'];
+let indEvent=null;
+function askInduction(){
+  indEvent=[...state.events].reverse().find(e=>e.type==='event'&&e.label==='導入')||null;
+  $('#indChips').innerHTML=IND_OPTIONS.map(o=>'<button class="chip" type="button" data-ind="'+esc(o)+'" style="padding:16px;font-size:17px">'+esc(o)+'</button>').join('');
+  $$('#indChips [data-ind]').forEach(b=>b.addEventListener('click',()=>{
+    $('#indModal').classList.remove('show');
+    if(indEvent){ indEvent.label='導入（'+b.dataset.ind+'）'; indEvent.sub=b.dataset.ind; renderTimeline(); drawChart(); save(); toast('導入（'+b.dataset.ind+'）を記録しました'); }
+    indEvent=null;
+  }));
+  $('#indModal').classList.add('show');
+}
+/* ---------- 体位変換 ---------- */
+let evOptTarget=null;
+function evSets(){
+  const P=state.presets;
+  if(!Array.isArray(P.evSets)||!P.evSets.length){ P.evSets=[{id:uid(),name:'標準',events:Array.isArray(P.events)?P.events:[]}]; P.evActive=P.evSets[0].id; }
+  if(!Array.isArray(P.evSets.find(s=>s.id===P.evActive)&&P.evSets)||!P.evSets.some(s=>s.id===P.evActive))P.evActive=P.evSets[0].id;
+  P.evSets.forEach(x=>{ if(!Array.isArray(x.events))x.events=[]; });
+  return P.evSets;
+}
+function activeSet(){ const ss=evSets(); return ss.find(x=>x.id===state.presets.evActive)||ss[0]; }
+const POSITIONS=['仰臥位','腹臥位','右側臥位','左側臥位','ジャックナイフ'];
+function openEvOpts(label,opts){
+  evOptTarget={label,opts};
+  $('#posTitle').textContent=label+' — 選択してください';
+  $('#posChips').innerHTML=opts.map(o=>'<button class="chip" type="button" data-pos="'+esc(o)+'" style="padding:16px;font-size:17px">'+esc(o)+'</button>').join('');
+  $$('#posChips [data-pos]').forEach(b=>b.addEventListener('click',()=>{
+    $('#posModal').classList.remove('show');
+    addEvent(label+'（'+b.dataset.pos+'）',{type:'event',sub:b.dataset.pos});
+  }));
+  $('#posModal').classList.add('show');
+}
+
+/* ---------- gauze count ---------- */
+let gzAlert=false;
+function gauzeCount(){
+  const l=(state.gauze&&state.gauze.log)||[];
+  let inB=0,total=0;
+  l.forEach(g=>{ if(g.io==='in'){ total++; inB++; } else inB=Math.max(0,inB-1); });
+  return {inB,total};
+}
+function renderGauze(){
+  const c=gauzeCount();
+  $('#gzIn').textContent=c.inB; $('#gzTotal').textContent=c.total;
+  if(c.inB<=0)gzAlert=false;
+  $('#gzAlarm').style.display=(gzAlert&&c.inB>0)?'':'none';
+  $('#gzAlarmN').textContent=c.inB;
+}
+$('#gzInBtn').addEventListener('click',()=>{
+  if(!state.timer.started)startPause();
+  const t=Math.round(elapsedMin()*10)/10;
+  state.gauze.log.push({t,io:'in',id:Date.now()+Math.random()});
+  renderGauze(); renderTimeline(); save();
+  toast('ガーゼ 留置 +1（'+tStr(t)+'）');
+});
+$('#gzOutBtn').addEventListener('click',()=>{
+  const c=gauzeCount();
+  if(c.inB<=0){ toast('取り出すガーゼがありません'); return; }
+  const t=Math.round(elapsedMin()*10)/10;
+  state.gauze.log.push({t,io:'out',id:Date.now()+Math.random()});
+  renderGauze(); renderTimeline(); save();
+  toast('ガーゼ 取り出し −1（'+tStr(t)+'）');
+});
+$('#gzReset').addEventListener('click',()=>{
+  if(!((state.gauze&&state.gauze.log)||[]).length){ toast('ガーゼ記録はまだありません'); return; }
+  state.gauze.log=[];
+  renderGauze(); renderTimeline(); save();
+  toast('ガーゼカウントをリセットしました');
+});
+
+/* ---------- bench (個別チップ ON/OFF) ---------- */
+function benchOn(){ let on=false; state.events.forEach(e=>{ if(e.type!=='event')return; if(e.label==='ベンチ ON')on=true; else if(e.label==='ベンチ OFF')on=false; }); return on; }
+function renderBench(){
+  const on=benchOn(), b2=$('#benchBtn2');
+  if(b2){
+    b2.textContent=on?'人工呼吸（ベンチ）ON':'人工呼吸（ベンチ）OFF';
+    b2.style.background=on?'#1a7a4a':'var(--panel2)';
+    b2.style.color=on?'#fff':'var(--muted)';
+    b2.style.borderColor=on?'#1a7a4a':'var(--line)';
+  }
+}
+
+$('#bpModeBtn').addEventListener('click',()=>{
+  bpMode=(bpMode==='NIBP')?'IBP':'NIBP';
+  try{ localStorage.setItem('anes-bpmode',bpMode); }catch(e){}
+  $('#bpModeBtn').textContent='血圧測定: '+bpMode;
+  $('#bpModeBtn').style.background=bpMode==='IBP'?'#1a7a4a':'var(--panel2)';
+  $('#bpModeBtn').style.color=bpMode==='IBP'?'#fff':'var(--muted)';
+  VLABEL.nibpS=bpMode+' SYS mmHg'; VLABEL.nibpD=bpMode+' DIA mmHg';
+  drawChart(); save();
+  toast('血圧測定: '+bpMode);
+});
+$('#benchBtn2').addEventListener('click',()=>{
+  const t=Math.round(elapsedMin()*10)/10;
+  if(benchOn()){ state.events.push({t,id:Date.now()+Math.random(),label:'ベンチ OFF',type:'event'}); toast('ベンチ OFF（'+tStr(t)+'）'); }
+  else{ state.events.push({t,id:Date.now()+Math.random(),label:'ベンチ ON',type:'event'}); toast('ベンチ ON（'+tStr(t)+'）'); }
+  state.events.sort((a,b)=>a.t-b.t);
+  renderBench(); renderTimeline(); drawChart(); save();
+});
+
+/* ---------- main fluid line ---------- */
+const FLUID_DEFAULTS=['乳酸リンゲル液','酢酸リンゲル液','生理食塩水','ハートマン溶液','5%ブドウ糖液'];
+let fluidLastHTML=null;
+function criPumpParts(){
+  const W=parseFloat(state.caseInfo.weight)||0;
+  const parts=[];
+  state.events.forEach(ev=>{
+    if(!ev.inf||ev.inf.end!=null)return;
+    const rs=infRates(ev);
+    const r=rs[rs.length-1]; if(!r)return;
+    const d=parseFloat(r.doseStr!=null?r.doseStr:r.dose); if(isNaN(d))return;
+    const unit=(r.unit||ev.unit||'');
+    if(!unit||unit.includes('mL'))return;
+    const c=(state.presets.concs||[]).find(x=>x.name&&ev.label.indexOf(x.name)>=0);
+    if(!c)return;
+    const Cu=ugPerMl(parseFloat(c.val),c.unit);
+    if(isNaN(Cu)||Cu<=0)return;
+    const p=pumpFromDose(d,Cu,W,unit);
+    if(!isNaN(p)&&p>0)parts.push({label:ev.label,rate:p});
+  });
+  return parts;
+}
+function fluidPresets(){
+  if(!Array.isArray(state.presets.fluids))state.presets.fluids=FLUID_DEFAULTS.map(n=>({id:uid(),name:n}));
+  state.presets.fluids=state.presets.fluids.filter(p=>p.name&&String(p.name).trim());
+  return state.presets.fluids;
+}
+function renderFluidChips(){
+  const f=state.fluid||(state.fluid={name:null,total:'',tunit:'mL/kg/hr'});
+  const fps=fluidPresets();
+  const sel=$('#fluidSel');
+  sel.innerHTML='<option value="">輸液剤を選択…</option>'+fps.map(p=>'<option value="'+esc(p.name)+'"'+(f.name===p.name?' selected':'')+'>'+esc(p.name)+'</option>').join('')+'<option value="__add">＋ 輸液剤を追加（プリセット編集）</option>';
+  const kg=f.tunit!=='mL/hr';
+  $('#fluidUnitBtn').textContent=kg?'mL/kg/hr':'mL/hr';
+  $('#fluidUnitBtn').style.background=kg?'':'#1a7a4a';
+  $('#fluidUnitBtn').style.color=kg?'':'#fff';
+  $('#fluidTotalBtn').style.display=kg?'':'none';
+  $('#fluidTotal').style.display=kg?'none':'';
+  if(!kg)$('#fluidTotal').value=f.total||'';
+  $('#fluidSet').style.display=(f.tunit==='mL/hr')?'':'none';
+  $('#fluidTotalBtn').innerHTML=(f.total||'10')+' <small>mL/kg/hr</small>';
+  sel.onchange=()=>{
+    if(sel.value==='__add'){ sel.value=f.name||''; openPresets(); return; }
+    f.name=sel.value||null;
+    renderFluid(true); save();
+    if(f.name)toast('輸液剤: '+f.name);
+  };
+}
+function openFluidPicker(){
+  ensureAudio();
+  pwField='fluidtotal'; pwDec=0; pwIgnoreUntil=Date.now()+600;
+  $('#pwTitle').textContent='総流量 mL/kg/hr（1〜20）';
+  const wheel=$('#pwWheel');
+  wheel.innerHTML=Array.from({length:20},(_,i)=>'<div class="pw-item" data-v="'+(i+1)+'">'+(i+1)+'</div>').join('');
+  wheel.dataset.mn='1'; wheel.dataset.st='1';
+  const cur=clamp(parseInt((state.fluid&&state.fluid.total),10)||10,1,20);
+  $('#in-fluidtotal').value=String(cur);
+  $('#pwDirect').value='';
+  $('#pickerModal').classList.add('show');
+  requestAnimationFrame(()=>{ wheel.scrollTop=(cur-1)*44; pwIgnoreUntil=Date.now()+600; });
+}
+$('#fluidTotalBtn').addEventListener('click',openFluidPicker);
+$('#in-fluidtotal').addEventListener('input',()=>{
+  const f=state.fluid||(state.fluid={name:null,total:'',tunit:'mL/kg/hr'});
+  f.total=$('#in-fluidtotal').value||'10';
+  $('#fluidTotalBtn').innerHTML=f.total+' <small>mL/kg/hr</small>';
+  renderFluid(true); save();
+});
+function fluidAbs(f,W){
+  const T=parseFloat(f.total);
+  if(isNaN(T)||T<=0)return null;
+  return (f.tunit==='mL/hr')? T : (W>0? T*W : null);
+}
+function renderFluid(force){
+  const box=$('#fluidBox'); if(!box)return;
+  const f=state.fluid||(state.fluid={name:null,total:'',tunit:'mL/kg/hr'});
+  const W=parseFloat(state.caseInfo.weight)||0;
+  const abs=fluidAbs(f,W);
+  const parts=criPumpParts();
+  const tot=parts.reduce((s,x)=>s+x.rate,0);
+  const uTxt=f.tunit||'mL/kg/hr';
+  let html='';
+  if(!f.name&&!f.total){ html='<span class="hint">未設定 — 輸液剤を選択し、総流量を設定してください</span>'; }
+  else if(f.name&&abs!=null){
+    html+='<div><b>'+esc(f.name)+'</b>　総流量 <b>'+esc(f.total)+' '+uTxt+'</b>'+(f.tunit==='mL/hr'?'':'（'+(W>0?W+'kg → '+fmtP(abs)+'mL/hr':'体重未設定')+'）')+'</div>';
+    if(parts.length){
+      html+='<div style="margin-top:4px">CRI分：'+parts.map(x=>esc(x.label)+' '+fmtP(x.rate)+'mL/hr').join(' ＋ ')+' ＝ <b>'+fmtP(tot)+'mL/hr</b></div>';
+      const main=abs-tot;
+      html+='<div style="margin-top:6px;font-size:17px;font-weight:700;color:'+(main<0?'#C2426E':'#1a7a4a')+'">→ メインポンプ '+fmtP(Math.max(0,main))+'mL/hr'+(main<0?'（⚠ CRI分が総流量を超えています）':'')+'</div>';
+    }else{
+      html+='<div style="margin-top:6px;font-size:17px;font-weight:700;color:#1a7a4a">→ メインポンプ '+fmtP(abs)+'mL/hr（CRIなし）</div>';
+    }
+  }else if(f.name){ html='<div><b>'+esc(f.name)+'</b>　<span class="hint">'+(uTxt==='mL/kg/hr'?'総流量が未設定です':'総流量が未設定です')+'</span></div>'; }
+  else{ html='<div><span class="hint">総流量 '+esc(f.total)+' '+uTxt+'（輸液剤未選択）</span></div>'; }
+  if(force||html!==fluidLastHTML){ box.innerHTML=html; fluidLastHTML=html; }
+}
+$('#fluidUnitBtn').addEventListener('click',()=>{
+  const f=state.fluid||(state.fluid={name:null,total:'',tunit:'mL/kg/hr'});
+  f.tunit=(f.tunit==='mL/hr')?'mL/kg/hr':'mL/hr';
+  renderFluidChips(); renderFluid(true); save();
+});
+$('#fluidSet').addEventListener('click',()=>{
+  const f=state.fluid||(state.fluid={name:null,total:'',tunit:'mL/kg/hr'});
+  const v=$('#fluidTotal').value.trim();
+  if(!v||isNaN(parseFloat(v))||parseFloat(v)<=0){ toast('総流量を数値で入力してください'); return; }
+  f.total=v; renderFluid(true); save();
+  toast('総流量を '+v+'mL/hr に設定しました');
+});
+function fluidNotify(){
+  renderFluid(true);
+  const f=state.fluid||{};
+  const W=parseFloat(state.caseInfo.weight)||0;
+  if(!f.name)return;
+  const abs=fluidAbs(f,W);
+  if(abs==null)return;
+  const parts=criPumpParts();
+  const main=abs-parts.reduce((s,x)=>s+x.rate,0);
+  toast('メイン輸液（'+f.name+'）→ '+fmtP(Math.max(0,main))+'mL/hr に調整');
+}
 
 /* ---------- 記録修正 ---------- */
 let eeTarget=null;
@@ -1557,7 +2109,8 @@ function renderTimeline(){
   const items=[
     ...state.records.map(r=>({t:r.t,id:r.id,kind:'vital',r})),
     ...state.events.map(e=>({t:e.t,id:e.id,kind:e.type,e})),
-    ...state.photos.map(p=>({t:p.t,id:p.id,kind:'photo',p}))
+    ...state.photos.map(p=>({t:p.t,id:p.id,kind:'photo',p})),
+    ...((state.gauze&&state.gauze.log)||[]).map(g=>({t:g.t,id:g.id,kind:'gauze',g}))
   ].sort((a,b)=>a.t-b.t);
   if(!items.length){ ul.innerHTML='<li><div class="body" style="color:var(--muted)">まだ記録がありません</div></li>'; return; }
   ul.innerHTML=items.map(it=>{
@@ -1575,6 +2128,8 @@ function renderTimeline(){
       }
       body=it.e.label+'　'+[it.e.dose?(it.e.dose+(it.e.unit||'')):null,it.e.route,it.e.pump,it.e.calc?'→ '+it.e.calc:null,infTxt,it.e.memo].filter(Boolean).join('　');
     }
+    else if(it.kind==='mat'){ badge='<span class="badge drug">材料</span>'; body=it.e.label; }
+    else if(it.kind==='gauze'){ badge='<span class="badge event" style="background:#C2426E;color:#fff">ガーゼ</span>'; body=(it.g.io==='in'?'ガーゼを留置（+1枚）':'ガーゼを取り出し（−1枚）'); }
     else{ badge='<span class="badge photo">写真</span>'; body='モニター写真を添付'+(it.p.ocr?'<div class="ocr-out">'+it.p.ocr+'</div>':''); }
     return '<li><span class="t mono">'+tStr(it.t)+'</span><div class="body">'+badge+' '+body+'</div>'+
       '<span class="acts"><button data-eedit="'+it.kind+':'+it.id+'" type="button">修正</button><button class="d" data-del="'+it.kind+':'+it.id+'" type="button">削除</button></span></li>';
@@ -1583,12 +2138,14 @@ function renderTimeline(){
     const [kind,id]=b.dataset.del.split(':');
     if(kind==='vital') state.records=state.records.filter(r=>String(r.id)!==id);
     else if(kind==='photo') state.photos=state.photos.filter(p=>String(p.id)!==id);
+    else if(kind==='gauze') state.gauze.log=state.gauze.log.filter(g=>String(g.id)!==id);
+    else if(kind==='mat'){ state.events=state.events.filter(e=>String(e.id)!==id); }
     else{ const ev=state.events.find(e=>String(e.id)===id); if(ev&&ev.type==='drug')decUsage(ev.label); state.events=state.events.filter(e=>String(e.id)!==id); }
-    drawChart(); renderTimeline(); save();
+    renderGauze(); drawChart(); renderTimeline(); save();
   }));
   $$('#timeline [data-eedit]').forEach(b=>b.addEventListener('click',()=>{
     const pr=b.dataset.eedit.split(':');
-    if(pr[0]==='drug'||pr[0]==='event')openEvEdit(pr[0],pr.slice(1).join(':'));
+    if(pr[0]==='drug'||pr[0]==='event'||pr[0]==='mat')openEvEdit(pr[0]==='mat'?'event':pr[0],pr.slice(1).join(':'));
   }));
   updateUndoBtn();
 }
@@ -1601,12 +2158,12 @@ $('#photoInput').addEventListener('change',e=>{
   rd.onload=()=>{
     const img=new Image();
     img.onload=()=>{
-      const mx=720, sc=Math.min(1,mx/Math.max(img.width,img.height));
+      const mx=1600, sc=Math.min(1,mx/Math.max(img.width,img.height));
       const cv=document.createElement('canvas');
       cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
       cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
       if(!state.timer.started) startPause();
-      state.photos.push({t:Math.round(elapsedMin()*10)/10, id:Date.now(), dataURL:cv.toDataURL('image/jpeg',.72), ocr:null});
+      state.photos.push({t:Math.round(elapsedMin()*10)/10, id:Date.now(), dataURL:cv.toDataURL('image/jpeg',.85), ocr:null});
       renderPhotos(); renderTimeline(); save();
       toast('写真を追加しました');
     };
@@ -1630,19 +2187,48 @@ function renderPhotos(){
   }));
 }
 let ocrLoading=false;
+/* OCR前処理: 拡大→グレースケール→コントラスト正規化→(暗い背景なら)反転 */
+function prepOCR(dataURL,cb){
+  const img=new Image();
+  img.onload=()=>{
+    try{
+      let sc=Math.sqrt(3500000/(img.width*img.height)); sc=Math.max(1,Math.min(2,sc));
+      const w=Math.round(img.width*sc), h=Math.round(img.height*sc);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const ctx=cv.getContext('2d',{willReadFrequently:true});
+      ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img,0,0,w,h);
+      const d=ctx.getImageData(0,0,w,h), a=d.data;
+      const g=new Uint8ClampedArray(w*h);
+      let mn=255,mx2=0,sum=0;
+      for(let i=0,p=0;i<a.length;i+=4,p++){ const v=(a[i]*299+a[i+1]*587+a[i+2]*114)/1000; g[p]=v; sum+=v; if(v<mn)mn=v; if(v>mx2)mx2=v; }
+      const rng=Math.max(1,mx2-mn), invert=(sum/(w*h))<128;
+      for(let p=0;p<g.length;p++){ const v=(g[p]-mn)/rng*255; a[p*4]=a[p*4+1]=a[p*4+2]=invert?255-v:v; a[p*4+3]=255; }
+      ctx.putImageData(d,0,0);
+      cb(cv.toDataURL('image/png'));
+    }catch(e){ cb(dataURL); }
+  };
+  img.onerror=()=>cb(dataURL);
+  img.src=dataURL;
+}
 function runOCR(id){
   const p=state.photos.find(x=>String(x.id)===id); if(!p)return;
   const out=$('#ocrOut'); out.textContent='解析中…（初回は部品のダウンロードで数十秒かかることがあります）';
   const finish=(txt)=>{
-    p.ocr=txt; out.textContent='読取結果（必ず確認して「モニター入力」タブから入力してください）：\n'+txt;
+    p.ocr=txt;
+    const filled=autoFillFromOCR(txt);
+    out.textContent='読取結果：\n'+txt+(filled?'\n\n→ 自動入力: '+filled+'（モニター入力タブで確認し「記録」してください）':'\n（自動入力できた項目はありません。手入力してください）');
     renderPhotos(); save();
   };
   const start=()=>{
     if(ocrLoading)return; ocrLoading=true;
-    Tesseract.recognize(p.dataURL,'eng',{
-      tessedit_char_whitelist:'0123456789.:'
-    }).then(r=>{ ocrLoading=false; finish(r.data.text.trim()||'（数字を認識できませんでした。手入力してください）'); })
-    .catch(e=>{ ocrLoading=false; out.textContent='読取に失敗しました（'+e+'）。手入力してください。'; });
+    prepOCR(p.dataURL,(src)=>{
+      Tesseract.recognize(src,'eng',{
+        tessedit_pageseg_mode:'6',
+        preserve_interword_spaces:'1'
+      }).then(r=>{ ocrLoading=false; finish(r.data.text.trim()||'（数字を認識できませんでした。手入力してください）'); })
+      .catch(e=>{ ocrLoading=false; out.textContent='読取に失敗しました（'+e+'）。手入力してください。'; });
+    });
   };
   if(window.Tesseract){ start(); return; }
   const sc=document.createElement('script');
@@ -1652,24 +2238,154 @@ function runOCR(id){
   document.head.appendChild(sc);
 }
 
+/* OCRテキスト→モニター入力欄への自動反映 */
+function autoFillFromOCR(txt){
+  const t=' '+txt.replace(/[，,]/g,',')+' ';
+  const got=[];
+  const set=(k,v,ok,label)=>{
+    if(!ok)return;
+    v=clamp(v,RANGES[k][0],RANGES[k][1]);
+    const inp=$('#in-'+k);
+    inp.value=pwDecOf(k,v); inp.dispatchEvent(new Event('input'));
+    got.push(label+' '+v);
+  };
+  const pwDecOf=(k,v)=> RANGES[k][2]<1? v.toFixed(1) : String(Math.round(v));
+  let m;
+  if((m=t.match(/\bHR\b\D{0,8}(\d{1,3})/i))) set('hr',+m[1],+m[1]>=20,'HR');
+  if((m=t.match(/Sp\s*[0O]\s*2\D{0,8}(\d{2,3})/i))) set('spo2',+m[1],+m[1]>=50&&+m[1]<=100,'SpO2');
+  if((m=t.match(/Et\s*C\s*[0O]\s*2\D{0,8}(\d{1,3})/i))) set('etco2',+m[1],+m[1]>=5,'EtCO2');
+  if((m=t.match(/\bRR\b\D{0,8}(\d{1,3})/i))) set('rr',+m[1],+m[1]<120,'RR');
+  if((m=t.match(/N?IBP\D{0,10}(\d{1,3})\s*\/\s*(\d{1,3})/i))){ set('nibpS',+m[1],+m[1]>=30,'SYS'); set('nibpD',+m[2],+m[2]>=10,'DIA'); }
+  if((m=t.match(/(\d{2}[.,]\d)\s*(?:度|°\s*C|C\b|℃)/i))) set('temp',parseFloat(m[1].replace(',','.')),+m[1]>=33&&+m[1]<=42,'体温');
+  if((m=t.match(/(\d\.\d)\s*%/))) set('anes',+m[1],+m[1]>=0.2&&+m[1]<=8,'麻酔');
+  return got.length? got.join('・') : null;
+}
+
+/* ---------- 薬剤手引き ---------- */
+const DRUG_GUIDE=[
+{n:'アドレナリン（ボスミン）',k:'心停止/低血圧重症',c:'1アンプル（1mg/ml）を生食10mlにメスアップ',d:'心停止：0.1ml/kg iv（4分毎）／猫の低血圧重症：1µg/kg/min CRI（BW(kg)×0.6＝ml/hr）※血圧上昇したら半量→半量と漸減',w:'徐脈時のCRIでは心拍数に注意'},
+{n:'アトロピン',k:'徐脈',c:'原液のまま（10倍希釈：1ml+生食9.0ml）',d:'0.02〜0.05ml/kg（10〜25µg/kg）iv（心停止時は0.1ml/kg）／超小型犬は10倍希釈0.2ml/kg',w:'0.02ml/kg(10µg/kg)から開始が基本。効かなければ追加'},
+{n:'2%リドカイン',k:'抗不整脈薬',c:'原液のまま（10倍希釈：1ml+生食9.0ml）',d:'0.1ml/kg iv（4回まで）→効果があれば50〜100µg/kg/min CRI',w:'効果時間が短い。CRIへ移行を早めに'},
+{n:'エフェドリン',k:'低血圧',c:'1アンプルを生食40mlにメスアップ（40倍：0.25ml+生食10ml）',d:'0.05ml/kg ゆっくりiv（50µg/kg）／犬50〜100µg/kg・猫25〜50µg/kg',w:'※犬：心拍数<90回/minのときは先にアトロピンivで心拍数を上げてから投与'},
+{n:'ノルアドレナリン',k:'低血圧(心拍数>140)',c:'1アンプル（1mg/ml）を生食10mlにメスアップ',d:'BW(kg)×0.12＝ml/hr CRI（0.2µg/kg/min）スタート→BW(kg)×0.6＝ml/hr（1.0µg/kg/min）まで増量可（0.05〜2µg/kg/min）',w:'※徐脈時は禁忌。心拍数>140を確認'},
+{n:'ドパミン',k:'利尿/心収縮力/血圧',c:'0.6mlを生食50mlにメスアップ',d:'BW(kg)×µg/kg/min÷4＝ml/hr CRI／犬：利尿1〜3・心収縮力4〜10・血圧>10（7から開始）µg/kg/min／猫：1〜3µg/kg/min',w:'猫は低用量から'},
+{n:'ドブタミン',k:'心収縮力',c:'0.6mlを生食50mlにメスアップ',d:'犬2.5〜20µg/kg/min CRI／猫1〜10µg/kg/min CRI',w:'※猫はけいれん発作誘発に注意'},
+{n:'ドパミン+ドブタミンMIX',k:'心機能循環動態(犬)',c:'ドパミン0.75ml＋ドブタミン0.75ml→生食50mlにメスアップ',d:'1ml/kg/hr CRI（各5µg/kg/minになる）',w:'犬での使用'},
+{n:'バソプレシン',k:'血管作動薬',c:'1アンプル（20U/ml）を生食10mlにメスアップ',d:'BW(kg)×0.001U/kg/min×150＝ml/hr CRI／基本0.001U/kg/min（増量しても0.003まで）',w:''},
+{n:'アクトシン',k:'心機能循環動態',c:'注射用水5ml溶解→その1mlを生食50mlにメスアップ',d:'CRI：1ml/kg/hr（20µg/kg/min）／iv：0.17ml/kg（10mg/kg）',w:''},
+{n:'デキサメサゾン',k:'ステロイド(ショック)',c:'原液のまま',d:'0.1ml/kg iv or im',w:'※頭部外傷時はステロイドNG（脳腫瘍・脳炎はOK）'},
+{n:'ソル・コーテフ',k:'ステロイド(ショック)',c:'原液のまま',d:'0.1ml/kg iv',w:'※しっかり輸液してから使用。まだならデキサメサゾンを先に'},
+{n:'フェンタニル',k:'鎮痛・鎮静',c:'0.25mg/5ml 1アンプルを生食50mlにメスアップ（0.1mg/2mlなら2アンプル+生食40ml）',d:'5µg/kg/hr CRI→1ml/kg/hr／犬10〜20µg/kg/hrまで増量可（術後は犬<5・猫<1〜2µg/kg/hr）',w:'※急に濃度を上げるとすぐ徐脈になるので注意／術後CRI時は呼吸抑制注意'},
+{n:'メデトミジン',k:'鎮静/鎮痛・血圧管理',c:'100倍希釈：0.1mlを生食10mlにメスアップ（10µg/ml）',d:'鎮静：0.1ml/kg im／鎮痛・血圧：0.025〜0.1ml/kg（0.25〜1.0µg/kg）',w:'※投与後に徐脈・高血圧→血圧が下がればアトロピン使用OK'},
+{n:'ブトルファノール(ベトルファール)',k:'鎮痛・鎮静',c:'原液のまま',d:'0.04ml/kg（0.2mg/kg）iv',w:'何回か投与OK（1時間に3回まで）'},
+{n:'ブプレノルフィン',k:'鎮痛',c:'原液のまま',d:'0.05ml/kg（10µg/kg）iv',w:''},
+{n:'フロセミド',k:'利尿薬',c:'原液のまま',d:'0.2〜0.4ml/kg iv',w:''},
+{n:'マンニトール',k:'利尿薬',c:'原液のまま',d:'2.5〜5ml/kg を30分かけてiv(CRI)',w:'急速投与しない'},
+{n:'フェノバール',k:'抗けいれん薬',c:'原液のまま',d:'0.03ml/kg im or iv',w:''},
+{n:'ジアゼパム',k:'抗けいれん薬',c:'原液のまま',d:'0.2ml/kg iv',w:''},
+{n:'ミダゾラム',k:'抗けいれん/鎮静',c:'原液のまま',d:'0.06ml/kg 鼻腔内（ファインアトマイザーネイザル）',w:''},
+{n:'ドキサプラム',k:'呼吸興奮薬',c:'原液のまま',d:'0.05〜0.25ml/kg iv（新生児は1滴）',w:''},
+{n:'プロポフォール',k:'心原性肺水腫 挿管管理',c:'原液（10mg/ml）',d:'0.025〜0.05mg/kg/min CRI＋イソフルレン1%',w:''},
+{n:'ナファモスタット',k:'膵炎・DIC',c:'1V(10mg)を5%ブドウ糖液48mlに溶解',d:'0.06〜0.2mg/kg/hr CRI→0.5ml/kg/hr（0.1mg/kg/hr）',w:''},
+{n:'FOY(ガベキサート)',k:'膵炎・DIC',c:'1V(1000mg)を500ml輸液バッグに溶解',d:'1〜2mg/kg/hr CRI→5ml/kg/hr（1mg/kg/hr）',w:''},
+{n:'hANP(カルペリチド)',k:'心不全',c:'注射用水5mlで溶解→その0.9mlを5%ブドウ糖液60mlにメスアップ',d:'0.05〜0.1µg/kg/min→1ml/kg/hr（0.05µg/kg/min）',w:'※ドブタミンと混注禁忌！併用時は別ライン／※血圧低下するので血圧モニタリング'},
+{n:'局所麻酔薬 最大投与量',k:'神経ブロック',c:'最大投与量（上限）を超える時は生食で希釈',d:'2%リドカイン：犬0.4ml/kg(8mg/kg)・猫0.2ml/kg(4mg/kg)／0.5%マーカイン：犬0.4ml/kg(2mg/kg)・猫0.2ml/kg(1mg/kg)／0.2%アナペイン：犬1.5ml/kg(3mg/kg)・猫0.75ml/kg(1.5mg/kg)',w:'上限を超えないこと'},
+{n:'歯科処置（神経ブロック）',k:'神経ブロック',c:'2%リドカイン or 0.5%マーカイン or 0.2%アナペイン',d:'眼窩下神経ブロック・上顎神経ブロック：小型犬・猫0.25ml/カ所、中型・大型犬0.5ml/カ所（上限OKなら1.0ml可）／下歯槽神経ブロック：小型猫0.15ml・大型猫/小型犬0.2ml・中型犬0.4ml・大型犬0.5ml／カ所',w:''},
+{n:'前肢（神経ブロック）',k:'神経ブロック',c:'0.25%マーカイン or 0.2%アナペイン',d:'腋窩腕神経叢ブロック：0.3〜0.4ml/kg（小型犬は多め）／近位RUMMブロック：0.2〜0.4ml/kg（小型犬は多め）',w:''},
+{n:'後肢（神経ブロック）',k:'神経ブロック',c:'0.25%マーカイン or 0.2%アナペイン',d:'腰仙骨神経幹ブロック：0.4ml/kg／上鼠経大腿神経ブロック：0.2〜0.4ml/kg（小型犬多め）／坐骨神経ブロック：0.2ml/kg',w:''},
+{n:'体幹（神経ブロック）',k:'神経ブロック',c:'傍脊椎：0.2%アナペイン／硬膜外：0.25%マーカイン or 0.2%アナペイン',d:'傍脊椎ブロック：0.6ml/kg/カ所（0.2%アナペイン）／腰仙椎硬膜外：0.2ml/kg（L3付近まで=下腹部）・0.4ml/kg（T9付近まで=上腹部）／仙尾椎硬膜外：会陰・尾0.075〜0.1ml/kg、後肢0.2ml/kg',w:''},
+{n:'局所麻酔中毒（LAST）',k:'救急対応',c:'20%脂肪乳剤（イントラリポス）',d:'症状：嘔吐・筋痙攣・発作・意識障害、低血圧・不整脈（※神経症状が先、次に心毒性）／初期：1.5〜4ml/kg を2分かけてIV→0.25ml/kg/min CRI（30〜60分以上）／反応なければ1.5ml/kg を1分かけてIV、5分間隔で2回まで→0.5ml/kg/min CRI',w:'※MAX 10〜20ml/kg/30分。ショックの治療を並行して行う'},
+{n:'薬用量の計算（覚え書き）',k:'共通',c:'—',d:'①BW=5kg犬 0.1ml/kg iv → 0.1×5=0.5ml／②1ml+生食50ml→1ml/kg/hr CRI → シリンジ1ml+生食50ml、1ml×5kg=5ml/hrで流す／③1mg/mlの薬を0.2µg/kg/min 6時間分 → 必要量0.2×5×60×6=360µg、1ml=1000µgなので0.36ml。5ml/hrで流すなら30mlシリンジに薬0.36ml+生食で30ml',w:''}
+];
+function guideData(){
+  if(!Array.isArray(state.presets.guide)){ state.presets.guide=JSON.parse(JSON.stringify(DRUG_GUIDE)); try{ savePresets(); }catch(e){} }
+  return state.presets.guide;
+}
+function renderGuide(){
+  const q=($('#guideSearch').value||'').trim();
+  const src=Array.isArray(state.presets.guide)&&state.presets.guide.length?state.presets.guide:DRUG_GUIDE;
+  const list=src.map((g,i)=>({g,i})).filter(x=>!q||x.g.n.indexOf(q)>=0||x.g.k.indexOf(q)>=0||(x.g.d||'').indexOf(q)>=0);
+  $('#guideList').innerHTML=list.map(x=>
+    '<div style="border:1px solid var(--line);border-radius:10px;margin-bottom:6px;overflow:hidden">'+
+    '<div data-gi="'+x.i+'" style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--panel2);cursor:pointer">'+
+    '<b style="flex:1;font-size:15px">'+esc(x.g.n)+'</b><span class="hint" style="flex:none">'+esc(x.g.k||'')+'</span><span style="color:var(--muted)">▾</span></div>'+
+    '<div style="display:none;padding:10px 12px;font-size:13.5px;line-height:1.65">'+
+    '<div><b>希釈：</b>'+esc(x.g.c||'—')+'</div>'+
+    '<div style="margin-top:4px"><b>用量：</b>'+esc(x.g.d||'—')+'</div>'+
+    (x.g.w?'<div style="margin-top:4px;color:#C2426E"><b>注意：</b>'+esc(x.g.w)+'</div>':'')+
+    '<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-sm" data-gedit="'+x.i+'" type="button">編集</button><button class="btn btn-sm" data-gdel="'+x.i+'" type="button">削除</button></div>'+
+    '</div></div>').join('')||'<p class="hint">該当する薬剤がありません</p>';
+  $$('#guideList [data-gi]').forEach(d=>d.addEventListener('click',e=>{
+    if(e.target.closest('button'))return;
+    const body=d.nextElementSibling;
+    body.style.display=body.style.display==='none'?'':'none';
+  }));
+  $$('#guideList [data-gedit]').forEach(b=>b.addEventListener('click',()=>openGuideEdit(+b.dataset.gedit)));
+  $$('#guideList [data-gdel]').forEach(b=>b.addEventListener('click',()=>{
+    if(!confirm('この項目を削除しますか？'))return;
+    guideData().splice(+b.dataset.gdel,1); try{ savePresets(); }catch(e){} renderGuide();
+  }));
+}
+let geTarget=null;
+function openGuideEdit(idx){
+  const arr=guideData();
+  const g=idx==null?{n:'',k:'',c:'',d:'',w:''}:arr[idx];
+  if(idx==null){ arr.push(g); }
+  $('#ge-n').value=g.n||''; $('#ge-k').value=g.k||''; $('#ge-c').value=g.c||''; $('#ge-d').value=g.d||''; $('#ge-w').value=g.w||'';
+  geTarget=idx==null?arr.length-1:idx;
+  $('#guideEditModal').classList.add('show');
+  if(idx==null)$('#ge-n').focus();
+}
+$('#geSave').addEventListener('click',()=>{
+  const arr=guideData(), g=arr[geTarget]; if(!g)return;
+  const n=$('#ge-n').value.trim(); if(!n){ toast('薬剤名を入力してください'); return; }
+  g.n=n; g.k=$('#ge-k').value.trim(); g.c=$('#ge-c').value.trim(); g.d=$('#ge-d').value.trim(); g.w=$('#ge-w').value.trim();
+  try{ savePresets(); }catch(e){}
+  $('#guideEditModal').classList.remove('show'); renderGuide();
+  toast('手引きを更新しました');
+});
+$('#guideAdd').addEventListener('click',()=>openGuideEdit(null));
+function jumpGuide(name){
+  name=(name||'').trim();
+  const arr=guideData();
+  let hit=-1;
+  if(name)arr.forEach((g,i)=>{ if(hit<0&&(name.indexOf(g.n)>=0||g.n.indexOf(name)>=0))hit=i; });
+  $$('.tabbar button').forEach(x=>x.classList.remove('active'));
+  const gb=document.querySelector('.tabbar button[data-tab="guide"]');
+  if(gb)gb.classList.add('active');
+  $$('.tabpane').forEach(x=>x.classList.remove('active'));
+  const pane=document.querySelector('#pane-guide'); if(pane)pane.classList.add('active');
+  $('#guideSearch').value=hit>=0?arr[hit].n:'';
+  renderGuide();
+  if(hit>=0){
+    setTimeout(()=>{
+      $$('#guideList [data-gi]').forEach(r=>{ if(r.dataset.gi===String(hit)){ r.nextElementSibling.style.display=''; if(r.scrollIntoView)r.scrollIntoView({block:'center'}); } });
+    },80);
+    toast('手引き: '+arr[hit].n);
+  }else toast('該当がなかったので手引きの一覧を表示しました');
+}
+/* ---------- export / import ---------- */
+$('#guideSearch').addEventListener('input',renderGuide);
+
 /* ---------- export / import ---------- */
 function snapshotAll(){
-  return JSON.stringify({caseInfo:state.caseInfo,records:state.records,events:state.events,photos:state.photos,presets:state.presets,timer:{accum:state.timer.accum,started:state.timer.started}});
+  return JSON.stringify({caseInfo:state.caseInfo,records:state.records,events:state.events,photos:state.photos,gauze:state.gauze,presets:state.presets,timer:{accum:state.timer.accum,started:state.timer.started}});
 }
 function applyImported(d){
   state.caseInfo=Object.assign({owner:'',name:'',species:'—',breed:'',sex:'—',age:'',weight:'',date:'',proc:'',vet:'',recorder:''},d.caseInfo||{});
   state.records=d.records||[]; state.events=d.events||[]; state.photos=d.photos||[];
-  if(d.presets&&Array.isArray(d.presets.events)&&Array.isArray(d.presets.drugs)){ state.presets=d.presets; savePresets(); renderChips(); }
+  state.gauze=(d.gauze&&d.gauze.log)?d.gauze:{log:[]}; state.fluid=(d.fluid&&typeof d.fluid==='object')?d.fluid:{name:null,total:''};
+  if(d.presets&&Array.isArray(d.presets.events)&&Array.isArray(d.presets.drugs)){ state.presets=d.presets; if(!Array.isArray(state.presets.mats))state.presets.mats=MAT_DEFAULTS.map(n=>({id:uid(),name:n})); savePresets(); renderChips(); renderMatChips(); }
   state.timer={t0:null,accum:(d.timer&&d.timer.accum)||0,running:false,started:!!(d.timer&&d.timer.started),beepedMin:null};
   $('#startBtn').textContent='開始';
   if(state.records.length||state.events.length)hideChartEmpty();
-  renderCaseChip(); drawChart(); renderTimeline(); renderPhotos(); renderInfBar(); primeInputs(lastRecVals());
+  renderCaseChip(); drawChart(); renderTimeline(); renderPhotos(); renderInfBar(); renderGauze(); renderFluidChips(); renderFluid(true); primeInputs(lastRecVals());
   save();
 }
 $('#exportBtn').addEventListener('click',()=>{
   const payload={app:'anes-record',version:1,exportedAt:new Date().toISOString(),
     caseInfo:state.caseInfo,records:state.records,events:state.events,photos:state.photos,
-    presets:state.presets,timer:{accum:state.timer.accum,started:state.timer.started}};
+    gauze:state.gauze,presets:state.presets,timer:{accum:state.timer.accum,started:state.timer.started}};
   const c=state.caseInfo;
   const fname='麻酔記録_'+(c.name||'症例')+'_'+(c.date||new Date().toISOString().slice(0,10)).replace(/-/g,'')+'.json';
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
@@ -1705,6 +2421,34 @@ $('#importInput').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 
+$('#expPresetBtn').addEventListener('click',()=>{
+  const payload={app:'anes-presets',version:1,exportedAt:new Date().toISOString(),presets:state.presets};
+  const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+  const fname='麻酔プリセット_'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'.json';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},500);
+  toast('プリセットを書き出しました（'+fname+'）');
+});
+$('#impPresetBtn').addEventListener('click',()=>$('#presetInput').click());
+$('#presetInput').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    e.target.value='';
+    let d;
+    try{ d=JSON.parse(rd.result); }catch(err){ toast('読み込めません：プリセット書き出しファイルではありません'); return; }
+    const pr=d&&d.presets;
+    if(!d||d.app!=='anes-presets'||!pr||!Array.isArray(pr.events)||!Array.isArray(pr.drugs)){ toast('読み込めません：プリセット書き出しファイルではありません'); return; }
+    if(!Array.isArray(pr.concs))pr.concs=[];
+    if(!confirm('プリセットを読み込みます（イベント'+pr.events.length+'種・薬剤'+pr.drugs.length+'種・濃度'+pr.concs.length+'種）。\n現在のプリセットは上書きされます。よろしいですか？'))return;
+    state.presets=pr; if(!Array.isArray(state.presets.mats))state.presets.mats=MAT_DEFAULTS.map(n=>({id:uid(),name:n})); savePresets(); renderChips(); renderMatChips();
+    toast('プリセットを読み込みました');
+  };
+  rd.readAsText(f);
+});
+
 /* ---------- persistence ---------- */
 let saveTm, quotaWarned=false;
 function save(){
@@ -1729,9 +2473,10 @@ function initRestore(){
   $('#restoreOk').addEventListener('click',()=>{
     state.caseInfo=Object.assign(state.caseInfo,c);
     state.records=d.records||[]; state.events=d.events||[]; state.photos=d.photos||[];
+    state.gauze=(d.gauze&&d.gauze.log)?d.gauze:{log:[]}; state.fluid=(d.fluid&&typeof d.fluid==='object')?d.fluid:{name:null,total:''};
     state.timer.started=!!(d.timer&&d.timer.started);
     $('#restoreBar').classList.remove('show');
-    hideChartEmpty(); primeInputs(lastRecVals()); renderCaseChip(); drawChart(); renderTimeline(); renderPhotos(); renderInfBar();
+    hideChartEmpty(); primeInputs(lastRecVals()); renderCaseChip(); drawChart(); renderTimeline(); renderPhotos(); renderInfBar(); renderGauze(); renderFluidChips(); renderFluid(true);
     toast('復元しました');
   });
   $('#restoreNo').addEventListener('click',()=>{
@@ -1763,10 +2508,15 @@ function preparePrint(){
       }
       return '<tr><td class="mono">'+tStr(e.t)+'</td><td>'+(e.type==='drug'?'薬剤':'イベント')+'</td><td>'+e.label+(e.memo?'（'+e.memo+'）':'')+'</td><td>'+[e.dose?e.dose+(e.unit||''):null,e.route,e.pump,e.calc?'→ '+e.calc:null,infTxt].filter(Boolean).join(' ／ ')+'</td></tr>';
     }).join('')||'<tr><td colspan="4">イベントなし</td></tr>';
+  const mats={};
+  state.events.forEach(e=>{ if(e.type!=='mat')return; const m=e.label.match(/^(.*)\s+×(\d+)$/); const nm=m?m[1]:e.label; const q=m?+m[2]:1; mats[nm]=(mats[nm]||0)+q; });
+  const mk=Object.keys(mats);
+  $('#pMats').innerHTML='<tr><th>材料</th><th>使用数量</th></tr>'+(mk.length?mk.map(n=>'<tr><td>'+n+'</td><td>×'+mats[n]+'</td></tr>').join(''):'<tr><td colspan="2">記録なし</td></tr>');
   const ps=$('#pPhotoSec');
   if(state.photos.length){ ps.style.display='block'; $('#pPhotos').innerHTML=state.photos.map(p=>'<img src="'+p.dataURL+'">').join(''); }
   else ps.style.display='none';
-  $('#pFootL').textContent='記録件数: 5分値 '+state.records.length+'件・イベント '+state.events.length+'件';
+  const gc=gauzeCount();
+  $('#pFootL').textContent='記録件数: 5分値 '+state.records.length+'件・イベント '+state.events.length+'件・ガーゼ 使用'+gc.total+'枚（'+(gc.inB>0?'⚠ 体内に残り'+gc.inB+'枚':'体内 0枚確認済')+'）';
   drawChart($('#pChart'),'light',1560,860);
 }
 $('#printBtn').addEventListener('click',()=>{
@@ -1806,7 +2556,9 @@ function demoSeed(){
     {t:36,label:'閉創',type:'event',id:107}
   ];
   state.timer={t0:null,accum:40*60,running:false,started:true,beepedMin:null};
-  hideChartEmpty(); primeInputs(lastRecVals()); drawChart(); renderTimeline(); renderInfBar();
+  state.gauze={log:[{t:15,io:'in',id:201},{t:25,io:'in',id:202},{t:31,io:'out',id:203}]};
+  state.fluid={name:'乳酸リンゲル液',total:'10'};
+  hideChartEmpty(); primeInputs(lastRecVals()); drawChart(); renderTimeline(); renderInfBar(); renderGauze(); renderFluidChips(); renderFluid(true);
   $$('.tabbar button')[0].click();
   toast('デモデータを表示中（編集・出力を試せます）');
 }
@@ -1818,12 +2570,28 @@ window.addEventListener('resize',()=>drawChart());
 window.addEventListener('beforeunload',e=>{
   if(state.records.length||state.events.length){ save(); e.preventDefault(); e.returnValue=''; }
 });
-loadPresets(); renderChips(); primeInputs(); renderCaseChip(); updateUndoBtn(); renderInfBar(); updateSortBtn();
-drawChart();
-tick(); setInterval(tick,250);
-initRestore();
+/* tick(タイマー表示)を最優先で登録 — 以後の初期化が何に失敗しても時間表示は必ず動く */
+setInterval(tick,250); try{ tick(); }catch(e){ console.error(e); }
+function initFail(step,fn,err){
+  try{
+    console.error('INIT-FAIL step'+step,fn,err);
+    const d=document.createElement('div');
+    d.style.cssText='background:#C2426E;color:#fff;font-size:11px;padding:4px 8px;z-index:95';
+    d.textContent='初期化エラー step'+step+' ('+fn+'): '+err.message;
+    document.body.insertBefore(d,document.body.firstChild);
+  }catch(e2){}
+}
+[['loadPresets',1],['renderChips',2],['primeInputs',3],['renderCaseChip',4],['updateUndoBtn',5],['renderInfBar',6],['updateSortBtn',7],['renderGauze',8],['renderFluidChips',9]].forEach(x=>{
+  try{ window[x[0]](); }catch(err){ initFail(x[1],x[0],err); }
+try{ renderMatChips(); }catch(err){ initFail(13,'renderMatChips',err); }
+try{ renderBench(); }catch(err){ initFail(14,'renderBench',err); }
+try{ renderGuide(); }catch(err){ initFail(15,'renderGuide',err); }
+});
+try{ renderFluid(true); }catch(err){ initFail(10,'renderFluid',err); }
+try{ drawChart(); }catch(err){ initFail(11,'drawChart',err); }
+try{ initRestore(); }catch(err){ initFail(12,'initRestore',err); }
 if(new URLSearchParams(location.search).has('demo')) demoSeed();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
